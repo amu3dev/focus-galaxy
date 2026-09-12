@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Focus Galaxy"
+description = "A cinematic personal focus tool that turns competing priorities into an interactive galaxy, helping users see what deserves attention now."
+version = "1.0.0"
+id = "artifacts/focus-galaxy"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18857
+
+[services.development]
+run = "pnpm --filter @workspace/focus-galaxy run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/focus-galaxy", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/focus-galaxy/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18857"
+BASE_PATH = "/"

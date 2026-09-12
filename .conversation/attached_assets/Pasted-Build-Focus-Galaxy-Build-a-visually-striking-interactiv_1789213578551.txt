@@ -1,0 +1,252 @@
+Build: Focus Galaxy
+
+Build a visually striking, interactive single-page web app called Focus Galaxy.
+
+The goal is to create something that feels immediately impressive when opened, while also being genuinely useful.
+
+Product Idea
+
+Focus Galaxy helps a person understand what deserves their attention right now.
+
+Instead of displaying priorities as a traditional todo list or dashboard, represent them as a living visual galaxy.
+
+At the center is:
+
+YOU / NOW
+
+Around the center are interactive planets/orbs representing the user’s current priorities, for example:
+
+* Job Search
+* Consulting
+* SignalBoard
+* Learning
+* Family
+* Health
+
+Each priority has three values from 1–10:
+
+* Importance
+* Urgency
+* Energy / Effort
+
+These values should directly affect the visualization.
+
+Visual Meaning
+
+Importance → Orb size
+
+Higher importance = larger planet.
+
+Urgency → Distance from YOU / NOW
+
+Higher urgency = closer to the center.
+
+Energy / Effort → Visual intensity
+
+Higher energy should make the orb feel more active through subtle motion, pulse, orbit speed, or another elegant visual treatment.
+
+The relationship between the data and visualization should be intuitive.
+
+⸻
+
+Core Interaction
+
+The galaxy is the main interface — not decoration around a dashboard.
+
+When the user clicks an orb, open a clean detail panel showing:
+
+Priority name
+
+Importance
+[ slider ]
+
+Urgency
+[ slider ]
+
+Energy / Effort
+[ slider ]
+
+Changing these values should update the galaxy immediately and smoothly.
+
+The user should visually see the priority becoming larger, moving closer/further from the center, or changing its activity.
+
+⸻
+
+Focus Intelligence
+
+Calculate a deterministic Focus Score for every priority.
+
+Keep the algorithm simple and understandable.
+
+Use something similar to:
+
+Focus Score =
+Importance × 0.45
++ Urgency × 0.40
++ Energy × 0.15
+
+Normalize the result to a 0–100 score.
+
+Show the top priorities somewhere elegantly without turning the experience into a conventional analytics dashboard.
+
+Example:
+
+FOCUS SIGNAL
+
+1. Job Search — 87
+2. Consulting — 74
+3. SignalBoard — 61
+
+Also generate a short rule-based insight such as:
+
+Your attention is distributed across several priorities. Job Search currently has the strongest combination of importance and urgency.
+
+Do NOT use an LLM or external AI API for this.
+
+⸻
+
+Visual Direction
+
+This is extremely important.
+
+The application should feel:
+
+cinematic, minimal, premium, futuristic, calm
+
+Think of a sophisticated spatial intelligence interface rather than a productivity SaaS dashboard.
+
+Use:
+
+* deep dark background
+* elegant typography
+* atmospheric depth
+* subtle stars/particles
+* soft orbital paths
+* smooth transitions
+* tasteful glow
+* glass-like surfaces where appropriate
+* restrained accent colors
+* strong visual hierarchy
+
+The center YOU / NOW should feel like the gravitational center of the experience.
+
+The planets should feel alive but not distracting.
+
+Avoid:
+
+* generic dashboard layouts
+* excessive cards
+* large navigation bars
+* sidebars
+* tables
+* bright rainbow colors
+* excessive gradients
+* gimmicky animations
+* clutter
+* template-like SaaS UI
+
+The galaxy itself must be the hero.
+
+⸻
+
+Initial Experience
+
+Pre-populate the app with realistic demo priorities so the first screen already looks impressive.
+
+Use:
+
+* Job Search
+* Consulting
+* SignalBoard
+* Learning
+* Family
+* Health
+
+Give them varied values so the galaxy has an interesting composition immediately.
+
+The user should be able to:
+
+1. See the galaxy.
+2. Select a priority.
+3. Modify its values.
+4. Watch the visualization respond.
+5. Understand which priorities deserve attention.
+
+Add a simple way to create a new priority and remove an existing one, but keep these interactions visually secondary.
+
+⸻
+
+Technical Constraints
+
+This is intentionally a one-hour MVP.
+
+Optimize aggressively for:
+
+visual polish + core interaction > number of features
+
+Keep the architecture simple.
+
+No authentication.
+
+No backend.
+
+No database.
+
+No external APIs.
+
+No AI integration.
+
+No payments.
+
+No accounts.
+
+No multi-page architecture.
+
+Persist data locally in the browser if simple to implement.
+
+Use the simplest frontend stack that allows you to produce a polished result quickly.
+
+Prefer CSS/SVG/Canvas techniques that are lightweight and reliable.
+
+The experience must work well on desktop and remain usable on mobile.
+
+⸻
+
+Important Scope Rule
+
+You have approximately one hour of product scope.
+
+Do not expand the feature set.
+
+Do not build infrastructure for hypothetical future features.
+
+Do not add features unless they directly improve the core Focus Galaxy experience.
+
+If you have extra time, spend it on:
+
+* animation quality
+* spatial composition
+* typography
+* responsiveness
+* micro-interactions
+* visual polish
+
+—not additional product features.
+
+⸻
+
+Success Test
+
+When I open the finished app, within 5 seconds I should understand:
+
+These planets represent the things competing for my attention.
+
+Within 30 seconds I should be able to interact with one and understand:
+
+Changing my priorities changes my personal galaxy.
+
+And my first visual reaction should ideally be:
+
+“Wait — this was built in an hour?”
+
+Build the first complete working version now.
