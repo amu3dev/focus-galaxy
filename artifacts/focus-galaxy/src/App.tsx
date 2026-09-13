@@ -36,6 +36,18 @@ function getFocusScore(priority: Pick<Priority, MetricKey>) {
   return Math.round((priority.importance * 0.45 + priority.urgency * 0.4 + priority.energy * 0.15) * 10);
 }
 
+function getSubLabel(name: string) {
+  const map: Record<string, string> = {
+    'Health': 'BALANCE',
+    'SignalBoard': 'BUILD',
+    'Job Search': 'FOCUS',
+    'Learning': 'GROW',
+    'Consulting': 'LEVERAGE',
+    'Family': 'TOGETHER'
+  };
+  return map[name] || 'ORBITING';
+}
+
 function readPriorities(): Priority[] {
   if (typeof window === 'undefined') return seedPriorities;
   try {
@@ -71,12 +83,12 @@ function useParallax() {
 
 function AppLogo() {
   return (
-    <a className="inline-flex items-center gap-3 text-white no-underline hover:scale-[1.02] transition-transform" href="/" data-testid="link-home">
-      <div className="w-8 h-8 rounded-full border border-primary flex items-center justify-center relative shadow-[0_0_15px_rgba(155,91,228,0.4)]">
+    <a className="inline-flex items-center gap-3 text-white no-underline hover:scale-[1.02] transition-transform pointer-events-auto" href="/" data-testid="link-home">
+      <div className="w-8 h-8 rounded-full border-[1.5px] border-primary flex items-center justify-center relative shadow-[0_0_20px_rgba(155,91,228,0.6)]">
          <div className="w-4 h-1 border border-primary/80 rounded-full -rotate-45" />
          <div className="w-1.5 h-1.5 bg-white rounded-full absolute" />
       </div>
-      <span className="font-display font-semibold text-lg tracking-widest uppercase">Focus Galaxy</span>
+      <span className="font-sans font-bold text-[16px] tracking-widest uppercase">Focus Galaxy</span>
     </a>
   );
 }
@@ -231,13 +243,13 @@ function RangeControl({
   return (
     <div className="group">
       <div className="flex justify-between text-[11px] mb-2">
-        <span className="text-muted-foreground group-hover:text-white/80 transition-colors uppercase tracking-wider">{label}</span>
-        <span className="font-display font-medium text-white">{value}</span>
+        <span className="text-white/60 group-hover:text-white/80 transition-colors uppercase tracking-widest font-semibold">{label}</span>
+        <span className="font-sans font-bold text-white text-[13px]">{value}</span>
       </div>
-      <div className="relative h-[4px] bg-white/10 rounded-full w-full flex items-center">
+      <div className="relative h-[6px] bg-white/10 rounded-full w-full flex items-center">
         <motion.div 
            className="absolute left-0 h-full rounded-full" 
-           style={{ backgroundColor: color }}
+           style={{ backgroundColor: color, boxShadow: `0 0 10px ${color}` }}
            animate={{ width: `${(value/10)*100}%` }}
            transition={{ type: 'spring', damping: 20, stiffness: 200 }}
         />
@@ -247,9 +259,9 @@ function RangeControl({
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
         />
         <motion.div 
-          className="absolute w-3 h-3 rounded-full bg-white shadow-[0_0_8px_var(--c)] pointer-events-none"
+          className="absolute w-4 h-4 rounded-full bg-white shadow-[0_0_10px_var(--c)] pointer-events-none"
           style={{ '--c': color } as any}
-          animate={{ left: `calc(${(value/10)*100}% - 6px)` }}
+          animate={{ left: `calc(${(value/10)*100}% - 8px)` }}
           transition={{ type: 'spring', damping: 20, stiffness: 200 }}
         />
       </div>
@@ -261,26 +273,35 @@ function FocusSignalPanel({
   topPriorities,
   onSelect,
   onRename,
+  color,
 }: {
   topPriorities: Priority[];
   onSelect: (id: string) => void;
   onRename: (id: string, name: string) => void;
+  color: string;
 }) {
   return (
-    <div className="panel-card flex flex-col h-full z-20 pointer-events-auto">
+    <div 
+      className="panel-card flex flex-col h-full z-20 pointer-events-auto"
+      style={{
+        '--panel-glow': `${color}30`,
+        '--panel-glow-inset': `${color}10`,
+        borderColor: `${color}40`,
+      } as any}
+    >
       <div className="flex items-center gap-2 mb-3">
-        <Target className="text-white" size={16} />
-        <h3 className="font-sans font-semibold text-[15px] text-white tracking-wide">Focus Signal</h3>
+        <Target className="text-white" size={18} />
+        <h3 className="font-sans font-bold text-[16px] text-white tracking-wide">Focus Signal</h3>
       </div>
-      <p className="text-[13px] text-muted-foreground mb-6 leading-relaxed">
+      <p className="text-[13px] text-white/60 mb-6 leading-relaxed">
         Your attention is strongly pulled toward action and immediate delivery. Consider focusing on the highest urgency items.
       </p>
       
-      <div className="flex flex-col gap-5 mt-auto">
+      <div className="flex flex-col gap-4 mt-auto">
          {topPriorities.map((p, i) => (
            <div key={p.id} className="flex items-center gap-3 group w-full">
-            <span className="text-muted-foreground text-[11px] font-display w-3 text-left">{i + 1}</span>
-            <div className="w-2.5 h-2.5 rounded-full shadow-[0_0_8px_var(--c)]" style={{ '--c': p.hue, backgroundColor: p.hue } as any} />
+            <span className="text-white/40 text-[11px] font-display w-3 text-left font-bold">{i + 1}</span>
+            <div className="w-3 h-3 rounded-full shadow-[0_0_8px_var(--c)]" style={{ '--c': p.hue, backgroundColor: p.hue } as any} />
              <input
                key={p.name}
                defaultValue={p.name}
@@ -295,12 +316,12 @@ function FocusSignalPanel({
                onKeyDown={(event) => {
                  if (event.key === 'Enter') event.currentTarget.blur();
                }}
-               className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-1 -ml-1 text-[13px] font-medium text-muted-foreground outline-none transition-colors hover:border-white/10 hover:text-white focus:border-primary/40 focus:bg-white/5 focus:text-white"
+               className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-1 -ml-1 text-[13px] font-semibold text-white/80 outline-none transition-colors hover:border-white/10 hover:text-white focus:border-white/20 focus:bg-white/5 focus:text-white"
              />
-            <div className="w-20 lg:w-24 h-1.5 bg-white/10 rounded-full overflow-hidden flex-shrink-0">
-               <div className="h-full rounded-full" style={{ width: `${getFocusScore(p)}%`, backgroundColor: p.hue, boxShadow: `0 0 8px ${p.hue}` }} />
+            <div className="w-16 lg:w-20 h-[6px] bg-white/10 rounded-full overflow-hidden flex-shrink-0">
+               <div className="h-full rounded-full" style={{ width: `${getFocusScore(p)}%`, backgroundColor: p.hue, boxShadow: `0 0 10px ${p.hue}` }} />
             </div>
-            <span className="text-[13px] font-display font-bold w-6 text-right text-white">{getFocusScore(p)}</span>
+            <span className="text-[13px] font-sans font-bold w-6 text-right text-white">{getFocusScore(p)}</span>
            </div>
         ))}
       </div>
@@ -340,11 +361,11 @@ function ManageTasksDialog({
       >
         <div className="flex items-start justify-between gap-4 mb-5">
           <div>
-            <h2 id="manage-tasks-title" className="font-display text-xl font-semibold text-white tracking-wide">Manage priorities</h2>
-            <p className="text-muted-foreground text-xs mt-1.5">Rename any pre-listed or added planet.</p>
+            <h2 id="manage-tasks-title" className="font-display text-xl font-bold text-white tracking-wide">Manage priorities</h2>
+            <p className="text-white/60 text-xs mt-1.5 font-medium">Rename any pre-listed or added planet.</p>
           </div>
-          <button type="button" onClick={onClose} className="w-7 h-7 rounded-full bg-white/5 border border-white/10 text-muted-foreground flex items-center justify-center hover:text-white">
-            <X size={14} />
+          <button type="button" onClick={onClose} className="w-8 h-8 rounded-full bg-white/5 border border-white/10 text-white/60 flex items-center justify-center hover:text-white hover:bg-white/10 transition-colors">
+            <X size={16} />
           </button>
         </div>
         <div className="flex flex-col gap-2 max-h-[55vh] overflow-y-auto pr-1">
@@ -364,7 +385,7 @@ function ManageTasksDialog({
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') event.currentTarget.blur();
                 }}
-                className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none focus:border-primary/60"
+                className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm font-semibold text-white outline-none focus:border-primary/60 transition-colors"
               />
               <button
                 type="button"
@@ -372,7 +393,7 @@ function ManageTasksDialog({
                   onSelect(priority.id);
                   onClose();
                 }}
-                className="px-3 py-2 rounded-lg border border-white/10 text-[11px] text-muted-foreground hover:bg-white/10 hover:text-white"
+                className="px-3 py-2 rounded-lg border border-white/10 text-[11px] font-bold text-white/60 hover:bg-white/10 hover:text-white transition-colors"
               >
                 Tune
               </button>
@@ -385,27 +406,43 @@ function ManageTasksDialog({
 }
 
 function InsightPanel({ insight, priority }: { insight: string, priority?: Priority }) {
+  const color = priority?.hue || '#9b5be4';
+  
   return (
-    <div className="panel-card flex flex-col items-center justify-center text-center relative overflow-hidden min-h-[240px] z-20 pointer-events-auto">
+    <div 
+      className="panel-card flex flex-col items-center justify-center text-center relative overflow-hidden min-h-[240px] z-20 pointer-events-auto"
+      style={{
+        '--panel-glow': `${color}30`,
+        '--panel-glow-inset': `${color}10`,
+        borderColor: `${color}40`,
+      } as any}
+    >
       {priority && (
-         <div className="absolute inset-0 opacity-15 pointer-events-none transition-colors duration-700" style={{ background: `radial-gradient(circle at 50% 0%, ${priority.hue}, transparent 70%)` }} />
+         <div className="absolute inset-0 opacity-20 pointer-events-none transition-colors duration-700" style={{ background: `radial-gradient(circle at 50% -20%, ${priority.hue}, transparent 70%)` }} />
       )}
       
-      <div className="w-12 h-12 rounded-full border border-white/10 bg-white/5 flex items-center justify-center mb-5 z-10 transition-colors duration-500" style={{ boxShadow: priority ? `0 0 20px ${priority.hue}40` : 'none' }}>
-        <Orbit size={20} className={priority ? "text-white" : "text-muted-foreground"} style={{ color: priority?.hue }} />
+      <div className="w-12 h-12 rounded-full border border-white/20 bg-white/5 flex items-center justify-center mb-4 z-10 transition-colors duration-500" style={{ boxShadow: priority ? `0 0 25px ${priority.hue}60` : 'none' }}>
+        <Activity size={20} className={priority ? "text-white" : "text-white/60"} style={{ color: priority?.hue }} />
       </div>
       
-      <h3 className="font-sans font-semibold text-base mb-3 text-white z-10 tracking-wide">
+      <h3 className="font-sans font-bold text-[16px] mb-2 text-white z-10 tracking-wide">
         {priority ? "You're pulled toward action." : "Field is open."}
       </h3>
       
-      <p className="text-[13px] text-muted-foreground leading-relaxed max-w-[260px] z-10">
+      <p className="text-[13px] text-white/60 leading-relaxed max-w-[280px] z-10 font-medium">
         {insight}
       </p>
       
       {priority && (
-        <button className="mt-6 flex items-center gap-2 px-5 py-2 rounded-full border border-white/10 bg-white/5 text-[11px] font-medium hover:bg-white/10 text-white transition-colors z-10 tracking-wider uppercase">
-          <Activity size={14} /> Explore Scenarios
+        <button 
+          className="mt-6 flex items-center gap-2 px-6 py-2.5 rounded-full border text-[12px] font-bold text-white transition-colors z-10 tracking-wide"
+          style={{
+            backgroundColor: `${priority.hue}30`,
+            borderColor: `${priority.hue}60`,
+            boxShadow: `0 0 15px ${priority.hue}40`,
+          }}
+        >
+          <Orbit size={14} /> Explore Scenarios
         </button>
       )}
     </div>
@@ -432,8 +469,7 @@ function SelectedPanel({
   }, [priority?.id, priority?.name]);
 
   if (!priority) return (
-     <div className="panel-card flex flex-col justify-center items-center text-center z-20 pointer-events-auto min-h-[240px]">
-       <p className="text-muted-foreground text-[13px]">Select a body to tune its orbit.</p>
+     <div className="panel-card flex flex-col justify-center items-center text-center z-20 pointer-events-auto min-h-[240px] opacity-0 pointer-events-none w-0 h-0 p-0 m-0">
      </div>
   );
   
@@ -453,11 +489,18 @@ function SelectedPanel({
         event.preventDefault();
         saveName();
       }}
+      style={{
+        '--panel-glow': `${priority.hue}40`,
+        '--panel-glow-inset': `${priority.hue}15`,
+        borderColor: `${priority.hue}50`,
+      } as any}
     >
       <div className="flex justify-between items-start mb-6">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full shadow-[0_0_15px_var(--c)]" style={{ '--c': priority.hue, background: `radial-gradient(circle at 35% 35%, #fff 0%, ${priority.hue} 50%, #000 90%)` } as any} />
-          <div>
+          <div className="w-12 h-12 rounded-full shadow-[0_0_20px_var(--c)] relative" style={{ '--c': priority.hue, background: `radial-gradient(circle at 35% 35%, #fff 0%, ${priority.hue} 50%, #000 90%)` } as any}>
+            <div className="absolute inset-0 rounded-full shadow-[inset_0_0_10px_rgba(255,255,255,0.5)] pointer-events-none"></div>
+          </div>
+          <div className="flex flex-col justify-center">
              <label htmlFor="selected-priority-name" className="sr-only">Planet name</label>
              <input
                id="selected-priority-name"
@@ -465,15 +508,15 @@ function SelectedPanel({
                onChange={(event) => setName(event.target.value)}
                onBlur={saveName}
                maxLength={40}
-               className="w-full min-w-0 max-w-[180px] rounded-md border border-transparent bg-transparent px-1 py-1 -ml-1 font-sans font-semibold text-[15px] leading-none text-white tracking-wide outline-none transition-colors hover:border-white/10 hover:bg-white/5 focus:border-primary/50 focus:bg-white/10"
+               className="w-full min-w-0 max-w-[180px] rounded-md border border-transparent bg-transparent px-1 py-1 -ml-1 font-sans font-bold text-[17px] leading-none text-white tracking-wide outline-none transition-colors hover:border-white/10 hover:bg-white/5 focus:border-white/20 focus:bg-white/10"
              />
-            <span className="text-[9px] text-primary uppercase tracking-widest font-display font-semibold">
-               {getFocusScore(priority) > 75 ? 'High Focus' : 'In Orbit'}
+            <span className="text-[10px] uppercase tracking-widest font-display font-bold mt-1 px-1" style={{ color: priority.hue }}>
+               {getFocusScore(priority) > 75 ? 'HIGH FOCUS' : 'IN ORBIT'}
             </span>
           </div>
         </div>
-        <button onClick={() => onRemove()} className="text-muted-foreground hover:text-white transition-colors" aria-label="Close panel">
-           <X size={16} />
+        <button type="button" onClick={() => onRemove()} className="text-white/40 hover:text-white transition-colors p-1" aria-label="Close panel">
+           <X size={18} />
         </button>
       </div>
       
@@ -483,20 +526,20 @@ function SelectedPanel({
          <RangeControl label="Energy / Effort" value={priority.energy} color={priority.hue} onChange={(v) => onUpdate('energy', v)} />
       </div>
       
-      <div className="flex items-center gap-3 mt-6">
-        <button onClick={() => { if(window.confirm('Remove this priority?')) onRemove() }} className="w-10 h-10 rounded-xl border border-white/10 text-muted-foreground flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 transition-colors">
+      <div className="flex items-center gap-3 mt-8">
+        <button type="button" onClick={() => { if(window.confirm('Remove this priority?')) onRemove() }} className="w-10 h-10 rounded-xl border border-white/10 bg-white/5 text-white/40 flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 transition-colors">
           <Trash2 size={16} />
         </button>
-         <button type="submit" className="flex-1 h-10 rounded-xl border border-white/10 bg-white/5 text-[12px] font-medium text-white hover:bg-white/10 transition-colors">
+         <button type="submit" className="flex-1 h-10 rounded-xl border border-white/10 bg-white/5 text-[13px] font-bold text-white hover:bg-white/10 transition-colors">
           Save Changes
         </button>
       </div>
        <button
          type="button"
          onClick={onComplete}
-         className="mt-3 h-10 w-full rounded-xl border border-emerald-400/30 bg-emerald-400/10 text-[12px] font-semibold text-emerald-200 hover:border-emerald-300/60 hover:bg-emerald-400/20 transition-colors flex items-center justify-center gap-2"
+         className="mt-3 h-10 w-full rounded-xl border border-emerald-400/30 bg-emerald-400/10 text-[13px] font-bold text-emerald-300 hover:border-emerald-300/60 hover:bg-emerald-400/20 transition-colors flex items-center justify-center gap-2"
        >
-         <Check size={15} /> Complete Task
+         <Check size={16} /> Complete Task
        </button>
     </form>
   );
@@ -549,20 +592,20 @@ function AddPriorityDialog({
       >
         <div className="flex justify-between gap-5 mb-6">
           <div>
-            <h2 className="font-display text-xl font-semibold m-0 text-white tracking-wide">New body</h2>
-            <p className="text-muted-foreground text-xs mt-1.5">Give the next thing a place in your sky.</p>
+            <h2 className="font-display text-xl font-bold m-0 text-white tracking-wide">New body</h2>
+            <p className="text-white/60 text-xs mt-1.5 font-medium">Give the next thing a place in your sky.</p>
           </div>
           <motion.button 
             type="button" 
-            className="w-7 h-7 rounded-full bg-white/5 border border-white/10 text-muted-foreground flex items-center justify-center hover:text-white transition-colors self-start" 
+            className="w-8 h-8 rounded-full bg-white/5 border border-white/10 text-white/60 flex items-center justify-center hover:text-white hover:bg-white/10 transition-colors self-start" 
             onClick={onClose} 
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
           >
-            <X size={14} />
+            <X size={16} />
           </motion.button>
         </div>
-        <label className="block text-white/80 text-[11px] uppercase tracking-wider font-semibold">
+        <label className="block text-white/60 text-[11px] uppercase tracking-widest font-bold">
           Priority name
           <input
             className="name-input"
@@ -576,7 +619,7 @@ function AddPriorityDialog({
         <div className="flex justify-end gap-3 mt-8">
           <motion.button 
             type="button" 
-            className="px-5 py-2.5 rounded-full border border-white/10 text-muted-foreground text-xs font-medium hover:bg-white/5 transition-colors" 
+            className="px-5 py-2.5 rounded-full border border-white/10 text-white/60 text-xs font-bold hover:bg-white/10 hover:text-white transition-colors" 
             onClick={onClose} 
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -599,18 +642,19 @@ function AddPriorityDialog({
 }
 
 const Particles = memo(function Particles() {
-  const particles = useMemo(() => Array.from({ length: 120 }).map((_, i) => ({
+  const particles = useMemo(() => Array.from({ length: 150 }).map((_, i) => ({
     id: i,
-    size: Math.random() * 2 + 0.5,
+    size: Math.random() * 2.5 + 0.5,
     left: `${Math.random() * 100}%`,
     top: `${Math.random() * 100}%`,
-    dur: Math.random() * 5 + 3,
+    dur: Math.random() * 6 + 4,
     delay: Math.random() * -10,
-    opacity: Math.random() * 0.6 + 0.1,
+    opacity: Math.random() * 0.7 + 0.2,
+    color: Math.random() > 0.8 ? (Math.random() > 0.5 ? '#ffccff' : '#ccddff') : '#ffffff'
   })), []);
 
   return (
-    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+    <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
       {particles.map((p) => (
         <div
           key={p.id}
@@ -620,6 +664,8 @@ const Particles = memo(function Particles() {
             height: p.size,
             left: p.left,
             top: p.top,
+            backgroundColor: p.color,
+            boxShadow: `0 0 ${p.size * 2}px ${p.color}`,
             '--twinkle-dur': `${p.dur}s`,
             animationDelay: `${p.delay}s`,
             '--max-opacity': p.opacity,
@@ -629,6 +675,36 @@ const Particles = memo(function Particles() {
     </div>
   );
 });
+
+function OrbitRings({ priorities }: { priorities: Priority[] }) {
+  return (
+    <>
+      {priorities.map(p => (
+        <OrbitRing key={`ring-${p.id}`} priority={p} />
+      ))}
+    </>
+  );
+}
+
+function OrbitRing({ priority }: { priority: Priority }) {
+  const urgencySpring = useSpring(priority.urgency, { stiffness: 50, damping: 15 });
+  const sizeX = useTransform(() => `${(24 + (10 - urgencySpring.get()) * 2.8) * 2}%`);
+  const sizeY = useTransform(() => `${(24 + (10 - urgencySpring.get()) * 2.8) * 2 * 0.82}%`);
+  
+  return (
+    <motion.div
+      className="absolute left-1/2 top-1/2 rounded-full pointer-events-none"
+      style={{
+        x: '-50%',
+        y: '-50%',
+        width: sizeX,
+        height: sizeY,
+        border: '1.5px solid rgba(255,255,255,0.06)',
+        zIndex: 0
+      }}
+    />
+  );
+}
 
 function SelectedOrbitRing({ priority }: { priority: Priority }) {
   const urgencySpring = useSpring(priority.urgency, { stiffness: 50, damping: 15 });
@@ -648,13 +724,13 @@ function SelectedOrbitRing({ priority }: { priority: Priority }) {
         y: '-50%',
         width: size,
         height: sizeSquished,
-        border: '1.5px dashed var(--borderColor)',
-        boxShadow: '0 0 25px var(--borderColor) inset, 0 0 25px var(--borderColor)',
-        opacity: 0.4,
+        border: '1.5px solid var(--borderColor)',
+        boxShadow: '0 0 20px var(--borderColor) inset, 0 0 20px var(--borderColor)',
+        opacity: 0.6,
         '--borderColor': priority.hue,
       } as any}
       initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 0.4, scale: 1 }}
+      animate={{ opacity: 0.6, scale: 1 }}
       exit={{ opacity: 0, scale: 1.05 }}
       transition={{ duration: 0.6, ease: "easeOut" }}
     />
@@ -726,394 +802,292 @@ function OrbComponent({
       initial={{ scale: 0, opacity: 0 }}
       animate={{ 
         scale: isCompleting ? [1, 1.35, 0.15] : 1,
-        opacity: isUnrelated ? 0.35 : 1,
+        opacity: isUnrelated ? 0.72 : 1,
         filter: isCompleting
           ? ['brightness(1)', 'brightness(3) drop-shadow(0 0 28px white)', 'brightness(5) blur(2px)']
-          : isUnrelated ? 'blur(1px) saturate(0.6)' : 'blur(0px) saturate(1)'
+          : isUnrelated ? 'brightness(0.82) grayscale(10%)' : 'brightness(1) grayscale(0%)',
       }}
-      exit={{ scale: 0, opacity: 0, filter: 'brightness(4) blur(4px)' }}
-      transition={isCompleting ? { duration: 0.85, times: [0, 0.45, 1], ease: 'easeInOut' } : { type: "spring", damping: 20, stiffness: 250 }}
+      transition={isCompleting ? { duration: 0.6, times: [0, 0.4, 1] } : { type: 'spring', damping: 25, stiffness: 200 }}
     >
       <motion.div
         className={`orb-wrapper ${isSelected ? 'selected' : ''}`}
-        onClick={(e) => { e.stopPropagation(); onSelect(priority.id); }}
-        whileHover={{ scale: 1.08 }}
-        whileTap={{ scale: 0.95 }}
+        onClick={() => onSelect(priority.id)}
+        whileHover={!isCompleting ? { scale: 1.05 } : {}}
       >
-        <div className="orb-badge">{score}</div>
-        
-        <motion.div
-           className="orb-planet"
-           style={{
-             width: size,
-             height: size,
-             '--orb-color': priority.hue,
-           } as any}
-           animate={{ scale: [1, 1.02 + priority.energy * 0.01, 1] }}
-           transition={{
-              scale: {
-                 duration: prefersReducedMotion ? 0 : 8.5 - priority.energy * 0.45,
-                 repeat: Infinity,
-                 ease: "easeInOut",
-                 delay: index * -0.8
-              }
-           }}
-        />
-        
-        <div className="orb-label">
-          <div className="orb-name">{priority.name}</div>
-          <div className="orb-sub">FOCUS</div>
+        <div className="relative">
+          <div className="absolute -top-3 -right-3 px-2 py-0.5 rounded-full text-[10px] font-bold font-display z-20 text-white" style={{
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            border: `1px solid ${priority.hue}60`,
+            boxShadow: `0 0 10px ${priority.hue}40`,
+          }}>
+            {score}
+          </div>
+          
+          <motion.div
+            className="orb-planet"
+            style={{
+              width: size,
+              height: size,
+              '--orb-color': priority.hue,
+            } as any}
+          />
+        </div>
+        <div className="orb-label mt-2">
+          <span className="orb-name block text-[13px] font-sans font-bold text-white tracking-wide">{priority.name}</span>
+          <span className="orb-sub block text-[9px] font-display font-bold tracking-widest mt-0.5" style={{ color: `${priority.hue}` }}>
+            {getSubLabel(priority.name)}
+          </span>
         </div>
       </motion.div>
     </motion.div>
   );
 }
 
-function GalaxyStage({
-  priorities,
-  selectedId,
-  completingId,
-  onSelect,
-  onAdd,
-  urgencyTrigger,
-  mouseX, mouseY,
-  prefersReducedMotion
-}: {
-  priorities: Priority[];
-  selectedId: string | null;
-  completingId: string | null;
-  onSelect: (id: string) => void;
-  onAdd: () => void;
-  urgencyTrigger: number;
-  mouseX: any; mouseY: any;
-  prefersReducedMotion: boolean;
-}) {
-  const springConfig = { damping: 40, stiffness: 80, mass: 1 };
-  const orbitX = useSpring(useTransform(mouseX, [-0.5, 0.5], prefersReducedMotion ? [0, 0] : [-15, 15]), springConfig);
-  const orbitY = useSpring(useTransform(mouseY, [-0.5, 0.5], prefersReducedMotion ? [0, 0] : [-15, 15]), springConfig);
-
-  const selectedPriority = priorities.find(p => p.id === selectedId);
-
-  return (
-    <motion.div 
-      className="orbit-stage w-full h-full absolute inset-0 pointer-events-none" 
-    >
-      <AnimatePresence mode="wait">
-        {priorities.length === 0 ? (
-          <motion.div 
-            key="empty"
-            className="absolute inset-0 flex flex-col items-center justify-center text-center z-10 pointer-events-auto"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.4 }}
-          >
-            <div className="w-32 h-32 border border-dashed border-white/20 rounded-full flex items-center justify-center mb-6 relative">
-              <div className="absolute inset-0 rounded-full bg-primary/10 animate-[core-pulse_4s_ease-in-out_infinite]" />
-              <div className="w-8 h-8 bg-primary/40 rounded-full shadow-[0_0_20px_var(--primary)]" />
-            </div>
-            <h2 className="font-display font-semibold text-2xl text-white mb-3">Your sky is open.</h2>
-            <p className="text-muted-foreground text-sm max-w-sm leading-relaxed mb-8">
-              Nothing is asking for attention yet. Place a priority here and let its orbit take shape.
-            </p>
-            <motion.button 
-              type="button" 
-              className="flex items-center gap-2 px-6 py-3 rounded-full bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors shadow-[0_4px_20px_rgba(155,91,228,0.4)]"
-              onClick={onAdd} 
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <Plus size={16} strokeWidth={2.5} /> Add a priority
-            </motion.button>
-          </motion.div>
-        ) : (
-          <div key="galaxy" className="absolute top-[45%] left-1/2 w-[min(100vw,1200px)] h-[min(100vw,1200px)] pointer-events-none" style={{ transform: 'translate(-50%, -50%)' }}>
-            <motion.div 
-              className="w-full h-full pointer-events-auto relative" 
-              onClick={() => onSelect('')} 
-              style={{ x: orbitX, y: orbitY }}
-            >
-              {/* Background dashed rings to form the grid map */}
-            {[25, 45, 65, 85].map(r => (
-               <div 
-                 key={r} 
-                 className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-white/[0.08] pointer-events-none" 
-                 style={{ width: `${r * 2}%`, height: `${r * 2 * 0.7}%` }} 
-               />
-            ))}
-            
-            <AnimatePresence>
-              {selectedPriority && <SelectedOrbitRing key={selectedPriority.id} priority={selectedPriority} />}
-            </AnimatePresence>
-
-            <motion.div 
-              className="absolute left-1/2 top-1/2 flex flex-col items-center justify-center z-10 w-[100px] h-[100px] sm:w-[150px] sm:h-[150px]"
-              style={{ x: '-50%', y: '-50%' }}
-              aria-label="You and now" 
-              onClick={(event) => event.stopPropagation()}
-              whileHover={{ scale: 1.05 }}
-            >
-              <AnimatePresence>
-                {urgencyTrigger > 0 && (
-                  <motion.div
-                    key={`pulse-${urgencyTrigger}`}
-                    className="absolute inset-0 rounded-full border-2 border-primary z-0"
-                    initial={{ scale: 1, opacity: 0.8 }}
-                    animate={{ scale: 3.2, opacity: 0 }}
-                    transition={{ duration: 1.8, ease: "easeOut" }}
-                  />
-                )}
-              </AnimatePresence>
-              <div className="core-glow" />
-              <div className="core-body" />
-              <div className="core-text">
-                <span className="core-title">YOU / NOW</span>
-                <span className="core-subtitle">Center of Gravity</span>
-              </div>
-            </motion.div>
-            
-            <AnimatePresence>
-              {priorities.map((priority, index) => (
-                <OrbComponent 
-                  key={priority.id}
-                  priority={priority}
-                  index={index}
-                  selectedId={selectedId}
-                  isCompleting={completingId === priority.id}
-                  onSelect={onSelect}
-                  prefersReducedMotion={prefersReducedMotion}
-                />
-              ))}
-            </AnimatePresence>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-    </motion.div>
-  );
-}
-
-function Home() {
+function FocusGalaxyContainer() {
   const [priorities, setPriorities] = useState<Priority[]>(readPriorities);
   const [selectedId, setSelectedId] = useState<string | null>(() => readPriorities()[0]?.id ?? null);
-  const [completingId, setCompletingId] = useState<string | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isManageOpen, setIsManageOpen] = useState(false);
   const [panelsOpen, setPanelsOpen] = useState(true);
-  const [urgencyTrigger, setUrgencyTrigger] = useState(0);
-  const [isFormed, setIsFormed] = useState(false);
+  const [completingId, setCompletingId] = useState<string | null>(null);
   
-  const { mouseX, mouseY, handleMouseMove, handleMouseLeave } = useParallax();
-  const prefersReducedMotion = useMemo(() => 
-    typeof window !== 'undefined' ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : false
-  , []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setIsFormed(true), 150);
-    return () => clearTimeout(timer);
-  }, []);
+  const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(priorities));
   }, [priorities]);
-
+  
   useEffect(() => {
-    if (selectedId && !priorities.some((priority) => priority.id === selectedId)) setSelectedId(null);
+    if (selectedId && !priorities.some(p => p.id === selectedId)) {
+      setSelectedId(null);
+    }
   }, [priorities, selectedId]);
 
-  const selectedPriority = priorities.find((priority) => priority.id === selectedId);
-  const topPriorities = useMemo(
-    () => [...priorities].sort((a, b) => getFocusScore(b) - getFocusScore(a)).slice(0, 3),
-    [priorities],
-  );
+  const addPriority = (name: string) => {
+    const hues = ['#f04e76', '#9b5be4', '#3aa2f7', '#f1883b', '#466bf0', '#85d852', '#f0c04e', '#4ef0c0'];
+    const newP: Priority = {
+      id: crypto.randomUUID(),
+      name,
+      importance: 5,
+      urgency: 5,
+      energy: 5,
+      hue: hues[priorities.length % hues.length],
+    };
+    setPriorities(prev => [...prev, newP]);
+    setIsAddOpen(false);
+    setSelectedId(newP.id);
+  };
+
+  const updatePriority = (id: string, metric: MetricKey, val: number) => {
+    setPriorities(prev => prev.map(p => p.id === id ? { ...p, [metric]: val } : p));
+  };
   
-  const strongest = topPriorities[0];
-  const insight = strongest
-    ? strongest.urgency >= 8
-      ? `${strongest.name} is pulling closest to now. Give it one clear next move before the rest of the sky gets louder.`
-      : strongest.energy >= 8
-        ? `${strongest.name} has high gravity and a high energy cost. Protect a generous, uninterrupted window for it.`
-        : `Your clearest signal is ${strongest.name}. It has the strongest blend of importance and urgency in the field.`
-    : 'A quiet field is still useful. Add one thing when you are ready to decide what deserves your attention.';
+  const renamePriority = (id: string, name: string) => {
+    setPriorities(prev => prev.map(p => p.id === id ? { ...p, name } : p));
+  };
+
+  const removePriority = (id: string) => {
+    setPriorities(prev => prev.filter(p => p.id !== id));
+    if (selectedId === id) setSelectedId(null);
+  };
 
   const selectPriority = (id: string) => {
     setSelectedId(id);
     setPanelsOpen(true);
   };
 
-  const updateSelected = (metric: MetricKey, value: number) => {
-    if (!selectedId) return;
-    setPriorities((current) => current.map((priority) => {
-      if (priority.id === selectedId) {
-        if (metric === 'urgency' && priority.urgency !== value) {
-          setUrgencyTrigger(prev => prev + 1);
-        }
-        return { ...priority, [metric]: value };
-      }
-      return priority;
-    }));
-  };
-
-  const renamePriority = (id: string, name: string) => {
-    setPriorities((current) => current.map((priority) =>
-      priority.id === id ? { ...priority, name } : priority
-    ));
-  };
-
-  const renameSelected = (name: string) => {
-    if (selectedId) renamePriority(selectedId, name);
-  };
-
-  const removeSelected = () => {
-    if (!selectedPriority) return;
-    setPriorities((current) => current.filter((priority) => priority.id !== selectedPriority.id));
-    setSelectedId(null);
-  };
-
-  const completeSelected = () => {
-    if (!selectedPriority || completingId) return;
-    const completedId = selectedPriority.id;
-    setCompletingId(completedId);
-    window.setTimeout(() => {
-      setPriorities((current) => current.filter((priority) => priority.id !== completedId));
-      setSelectedId(null);
+  const completePriority = (id: string) => {
+    setCompletingId(id);
+    setTimeout(() => {
+      removePriority(id);
       setCompletingId(null);
-    }, prefersReducedMotion ? 150 : 850);
+    }, 600);
   };
 
-  const createPriority = (name: string) => {
-    const colors = ['#f04e76', '#3aa2f7', '#f1883b', '#f4c33d', '#9b5be4', '#85d852'];
-    const newPriority: Priority = {
-      id: `${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'priority'}-${Date.now()}`,
-      name,
-      importance: 5,
-      urgency: 5,
-      energy: 5,
-      hue: colors[priorities.length % colors.length],
-    };
-    setPriorities((current) => [...current, newPriority]);
-    setSelectedId(newPriority.id);
-    setIsAddOpen(false);
-  };
-
-  const resetGalaxy = () => {
-    if (window.confirm('Restore the original priorities?')) {
+  const resetPriorities = () => {
+    if (window.confirm('Restore initial demo priorities?')) {
       setPriorities(seedPriorities);
-      setSelectedId(seedPriorities[0].id);
+      setSelectedId(null);
     }
   };
 
+  const topPriorities = [...priorities].sort((a, b) => getFocusScore(b) - getFocusScore(a)).slice(0, 3);
+  const selectedPriority = priorities.find(p => p.id === selectedId);
+  
+  const insight = useMemo(() => {
+    if (!selectedPriority) {
+      if (priorities.length === 0) return "Space is empty. Add a priority to begin.";
+      if (topPriorities.length > 0 && getFocusScore(topPriorities[0]) > 80) {
+        return `${topPriorities[0].name} demands attention. Consider giving it one clear next move.`;
+      }
+      return "Forces are balanced. Take a moment to reflect before choosing a path.";
+    }
+    const score = getFocusScore(selectedPriority);
+    if (score > 85) return `${selectedPriority.name} is pulling closest to now. Give it one clear next move before the rest of the sky gets louder.`;
+    if (selectedPriority.importance > 8 && selectedPriority.urgency < 5) return `Important but not urgent. Protect time for ${selectedPriority.name} before it becomes an emergency.`;
+    if (selectedPriority.energy > 8) return `High effort required. Break ${selectedPriority.name} into smaller pieces to reduce friction.`;
+    return `${selectedPriority.name} is steadily in orbit. Tune its metrics if the situation shifts.`;
+  }, [selectedPriority, topPriorities, priorities.length]);
+
+  const { mouseX, mouseY, handleMouseMove, handleMouseLeave } = useParallax();
+  const panX = useTransform(mouseX, [-0.5, 0.5], [12, -12]);
+  const panY = useTransform(mouseY, [-0.5, 0.5], [12, -12]);
+
   return (
-    <main className="galaxy-app min-h-[100dvh] relative overflow-x-hidden overflow-y-auto lg:overflow-hidden" onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
-      <div className="bg-stars pointer-events-none" />
+    <div 
+      className="relative w-full h-[100dvh] overflow-hidden bg-background select-none"
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+    >
+      <div className="bg-stars" />
       <Particles />
       
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+        <div className="absolute top-1/4 left-8 md:left-12 max-w-[150px] opacity-70 hidden sm:block">
+           <p className="text-[12px] leading-relaxed text-white/80 font-display">"A calmer mind<br/>creates a brighter<br/>future."</p>
+           <div className="w-6 h-[1px] bg-white/30 mt-3" />
+        </div>
+        
+        <div className="absolute top-1/4 right-8 md:right-12 text-right max-w-[150px] opacity-70 hidden sm:block">
+           <p className="text-[12px] leading-relaxed text-white/80 font-display">Different priorities<br/>Same universe<br/>Your focus.</p>
+           <div className="w-6 h-[1px] bg-white/30 mt-3 ml-auto" />
+        </div>
+        
+        <div className="absolute bottom-12 left-8 md:left-12 flex flex-col gap-2 opacity-60 hidden sm:flex">
+           <Target size={16} className="text-white/50" />
+           <p className="text-[10px] text-white/60 font-display font-medium">Balance today<br/>A brighter tomorrow.</p>
+        </div>
+        
+        <div className="absolute bottom-12 right-8 md:right-12 flex flex-col gap-2 items-end text-right opacity-60 hidden sm:flex">
+           <Orbit size={16} className="text-white/50" />
+           <p className="text-[10px] text-white/60 font-display font-medium">"Focus is freedom."</p>
+        </div>
+      </div>
+
+      <header className="fixed top-0 left-0 right-0 p-6 flex flex-col md:flex-row items-center justify-between z-30 pointer-events-none">
+        <div className="flex flex-col items-start gap-1 pointer-events-auto">
+          <AppLogo />
+          <span className="text-[11px] text-white/60 font-medium ml-1">Turn your priorities into clarity.</span>
+        </div>
+        
+        <div className="flex items-center gap-4 mt-4 md:mt-0 pointer-events-auto">
+          <div className="hidden md:flex items-center rounded-full bg-white/5 border border-white/10 p-1 backdrop-blur-md">
+            <button className="px-5 py-1.5 rounded-full bg-primary/20 text-white text-[11px] font-bold shadow-[0_0_10px_rgba(155,91,228,0.3)]">Today</button>
+            <button className="px-4 py-1.5 rounded-full text-white/50 hover:text-white transition-colors text-[11px] font-bold">This Week</button>
+            <button className="px-4 py-1.5 rounded-full text-white/50 hover:text-white transition-colors text-[11px] font-bold">This Month</button>
+          </div>
+          
+          <button onClick={() => setIsAddOpen(true)} className="flex items-center gap-2 px-5 py-2 rounded-full border border-primary/50 bg-primary/20 hover:bg-primary/30 text-white text-xs font-bold transition-colors shadow-[0_0_15px_rgba(155,91,228,0.3)]">
+            <Plus size={14} strokeWidth={3} /> Add Priority
+          </button>
+
+          <FocusAudio />
+
+          <button onClick={() => setIsManageOpen(true)} className="hidden lg:flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-xs font-bold transition-colors">
+            <ListChecks size={15} /> Manage
+          </button>
+          
+          <button onClick={resetPriorities} className="w-10 h-10 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors shadow-[0_4px_10px_rgba(0,0,0,0.5)]" aria-label="Reset priorities">
+            <RotateCcw size={15} />
+          </button>
+        </div>
+      </header>
+      
       <motion.div 
-        className="absolute inset-0 pointer-events-none"
-        initial={{ opacity: 0, filter: 'blur(3px)' }}
-        animate={{ 
-          opacity: isFormed ? 1 : 0, 
-          filter: isFormed ? 'blur(0px)' : 'blur(3px)' 
-        }}
-        transition={{ duration: 0.65, ease: "easeOut" }}
+        className="absolute inset-0 z-10"
+        style={{ x: panX, y: panY }}
       >
-        <div className="absolute inset-0 lg:fixed lg:inset-0 h-[65vh] lg:h-auto min-h-[480px]">
-           <GalaxyStage 
-             priorities={priorities} 
-             selectedId={selectedId} 
-              completingId={completingId}
-              onSelect={selectPriority}
-             onAdd={() => setIsAddOpen(true)}
-             urgencyTrigger={urgencyTrigger}
-             prefersReducedMotion={prefersReducedMotion}
-             mouseX={mouseX}
-             mouseY={mouseY}
-           />
+        <div className="absolute inset-0 transform-gpu origin-center">
+          
+          <OrbitRings priorities={priorities} />
+
+          {selectedPriority && (
+             <AnimatePresence>
+                <SelectedOrbitRing key="selected-ring" priority={selectedPriority} />
+             </AnimatePresence>
+          )}
+
+          <motion.div
+            className="absolute left-1/2 top-[44%] -translate-x-1/2 -translate-y-1/2 w-[132px] h-[132px] md:w-[150px] md:h-[150px] z-10"
+          >
+            <div className="core-glow" />
+            <div className="core-body" />
+            <div className="core-text">
+              <span className="core-title">YOU / NOW</span>
+              <span className="core-subtitle">Center of Gravity</span>
+            </div>
+          </motion.div>
+
+          <AnimatePresence>
+            {priorities.map((p, i) => (
+              <OrbComponent 
+                key={p.id} 
+                priority={p} 
+                index={i} 
+                selectedId={selectedId} 
+                onSelect={selectPriority}
+                isCompleting={p.id === completingId}
+                prefersReducedMotion={prefersReducedMotion}
+              />
+            ))}
+          </AnimatePresence>
+          
         </div>
       </motion.div>
       
-      <header className="absolute top-0 left-0 right-0 p-6 lg:p-8 flex justify-between items-start z-30 pointer-events-none">
-         <div className="flex flex-col gap-1 pointer-events-auto">
-            <div className="flex items-center gap-2">
-               <AppLogo />
-            </div>
-            <p className="text-[13px] text-muted-foreground mt-1.5 tracking-wide hidden sm:block ml-11">Turn your priorities into clarity.</p>
-         </div>
-         
-         <div className="flex items-center gap-4 lg:gap-6 pointer-events-auto">
-            <div className="hidden lg:flex gap-1 p-1 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
-               <span className="px-4 py-1.5 rounded-full bg-white/10 text-[11px] uppercase tracking-wider font-semibold text-white cursor-default">Today</span>
-               <span className="px-4 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-semibold text-white/40 cursor-default hover:text-white/70 transition-colors">This Week</span>
-               <span className="px-4 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-semibold text-white/40 cursor-default hover:text-white/70 transition-colors">This Month</span>
-            </div>
-            
-            <button onClick={() => setIsAddOpen(true)} className="flex items-center gap-2 px-4 py-2 rounded-full border border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 hover:border-primary transition-all text-xs lg:text-sm font-semibold backdrop-blur-md shadow-[0_0_20px_rgba(155,91,228,0.15)]">
-               <Plus size={16} strokeWidth={2.5} /> <span className="hidden sm:inline">Add Priority</span>
-            </button>
+      <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-background via-background/80 to-transparent pointer-events-none z-10" />
 
-             <FocusAudio />
-
-             <button onClick={() => setIsManageOpen(true)} className="flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-all text-xs font-semibold backdrop-blur-md">
-                <ListChecks size={16} /> <span className="hidden md:inline">Manage</span>
-             </button>
-            
-            <button onClick={resetGalaxy} className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/10 text-white/70 hover:text-white transition-all backdrop-blur-md" aria-label="Reset galaxy">
-               <RotateCcw size={15} />
-            </button>
-         </div>
-      </header>
-      
-      {/* Floating text elements */}
-      <div className="absolute top-[28%] left-10 text-muted-foreground/60 text-[13px] max-w-[180px] z-10 leading-relaxed tracking-wide hidden xl:block pointer-events-none">
-         "A calmer mind<br/>creates a brighter<br/>future."
-         <div className="w-6 h-[1px] bg-white/10 mt-5" />
-      </div>
-      
-      <div className="absolute top-[30%] right-10 text-muted-foreground/60 text-[13px] max-w-[160px] z-10 leading-relaxed tracking-wide hidden xl:block text-right pointer-events-none">
-         Different priorities<br/>Same universe<br/>Your focus.
-         <div className="w-6 h-[1px] bg-white/10 mt-5 ml-auto" />
-      </div>
-
-      <div className="absolute bottom-28 left-10 text-muted-foreground/60 text-[12px] max-w-[160px] z-10 leading-relaxed tracking-wide hidden xl:block pointer-events-none">
-         <div className="w-6 h-[1px] bg-white/10 mb-4" />
-         Balance today<br/>A brighter tomorrow.
-      </div>
-
-      <div className="absolute bottom-28 right-10 text-muted-foreground/60 text-[12px] z-10 hidden xl:block pointer-events-none tracking-wide">
-         "Focus is freedom."
-         <div className="w-6 h-[1px] bg-white/10 mt-4 ml-auto" />
-      </div>
-      
-      {/* Bottom panels wrapper */}
       <motion.div
-        className="relative lg:absolute lg:-bottom-2 lg:left-8 lg:right-8 z-20 mt-[60vh] lg:mt-0 p-4 lg:p-0 pointer-events-none"
-        animate={{ y: panelsOpen ? 0 : 245 }}
+        className="absolute -bottom-1 left-6 right-6 flex flex-col xl:flex-row items-end xl:items-stretch justify-center gap-6 z-20 pointer-events-none"
+        animate={{ y: panelsOpen ? 0 : 250 }}
         transition={{ type: 'spring', stiffness: 180, damping: 24 }}
       >
         <button
           type="button"
           onClick={() => setPanelsOpen((open) => !open)}
-          className="hidden lg:flex absolute left-1/2 -top-9 -translate-x-1/2 z-30 h-8 items-center gap-2 rounded-full border border-white/15 bg-[#110d19]/90 px-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/65 backdrop-blur-xl hover:border-primary/40 hover:text-white pointer-events-auto"
+          className="hidden xl:flex absolute left-1/2 -top-10 -translate-x-1/2 z-30 h-8 items-center gap-2 rounded-full border border-white/15 bg-[#110d19]/90 px-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/65 backdrop-blur-xl hover:border-primary/40 hover:text-white pointer-events-auto"
           aria-expanded={panelsOpen}
-          aria-label={panelsOpen ? 'Lower insight cards' : 'Raise insight cards'}
         >
           {panelsOpen ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
           {panelsOpen ? 'Focus on galaxy' : 'Show insights'}
         </button>
-        <motion.div 
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 lg:gap-8 max-w-[1200px] mx-auto pointer-events-auto"
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: isFormed ? (panelsOpen ? 1 : 0.35) : 0, y: isFormed ? 0 : 30 }}
-          transition={{ duration: 1, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-        >
-           {priorities.length > 0 && <FocusSignalPanel topPriorities={topPriorities} onSelect={selectPriority} onRename={renamePriority} />}
-           {priorities.length > 0 && <InsightPanel insight={insight} priority={selectedPriority} />}
-           {priorities.length > 0 && <SelectedPanel priority={selectedPriority} onUpdate={updateSelected} onRename={renameSelected} onComplete={completeSelected} onRemove={removeSelected} />}
-        </motion.div>
+        
+        <div className="w-full xl:w-[360px] shrink-0 transform-gpu transition-all duration-500 hidden md:block">
+           <FocusSignalPanel 
+             topPriorities={topPriorities} 
+              onSelect={selectPriority}
+             onRename={renamePriority}
+             color={topPriorities[0]?.hue || '#9b5be4'}
+           />
+        </div>
+        
+        <div className="w-full xl:w-[360px] shrink-0 transform-gpu transition-all duration-500 hidden md:block">
+           <InsightPanel 
+             insight={insight} 
+             priority={selectedPriority || topPriorities[0]} 
+           />
+        </div>
+        
+        {selectedId && (
+          <div className="w-full xl:w-[360px] shrink-0 transform-gpu transition-all duration-500">
+             <SelectedPanel 
+               priority={selectedPriority}
+               onUpdate={(metric, val) => updatePriority(selectedId, metric, val)}
+               onRename={(name) => renamePriority(selectedId, name)}
+               onComplete={() => completePriority(selectedId)}
+               onRemove={() => removePriority(selectedId)}
+             />
+          </div>
+        )}
       </motion.div>
-      
+
       <AnimatePresence>
-        {isAddOpen && <AddPriorityDialog onClose={() => setIsAddOpen(false)} onCreate={createPriority} />}
+        {isAddOpen && (
+          <AddPriorityDialog 
+            onClose={() => setIsAddOpen(false)} 
+            onCreate={addPriority} 
+          />
+        )}
         {isManageOpen && (
           <ManageTasksDialog
             priorities={priorities}
@@ -1123,7 +1097,26 @@ function Home() {
           />
         )}
       </AnimatePresence>
-    </main>
+
+      <button
+        onClick={() => setIsManageOpen(true)}
+        className="fixed bottom-6 right-6 z-30 flex md:hidden items-center justify-center w-12 h-12 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white shadow-lg pointer-events-auto"
+        aria-label="Manage priorities"
+      >
+        <ListChecks size={20} />
+      </button>
+
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 pointer-events-auto hidden md:flex items-center gap-2 opacity-50 hover:opacity-100 transition-opacity bg-black/40 px-4 py-1.5 rounded-full border border-white/10 backdrop-blur-md">
+        <div className="w-4 h-6 border-[1.5px] border-white/60 rounded-full flex justify-center pt-1">
+           <motion.div 
+             animate={{ y: [0, 4, 0] }} 
+             transition={{ repeat: Infinity, duration: 1.5 }}
+             className="w-1 h-1.5 bg-white/60 rounded-full" 
+           />
+        </div>
+        <span className="text-[10px] text-white/80 font-medium tracking-wide">Hover over cards and planets to explore</span>
+      </div>
+    </div>
   );
 }
 
@@ -1131,12 +1124,10 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter>
-          <Switch>
-            <Route path="/" component={Home} />
-            <Route component={NotFound} />
-          </Switch>
-        </WouterRouter>
+        <Switch>
+          <Route path="/" component={FocusGalaxyContainer} />
+          <Route component={NotFound} />
+        </Switch>
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>
