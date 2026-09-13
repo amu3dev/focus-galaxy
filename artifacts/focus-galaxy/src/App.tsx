@@ -483,7 +483,7 @@ function SelectedPanel({
 
   return (
     <form
-      className="panel-card flex flex-col relative overflow-hidden h-full z-20 pointer-events-auto"
+      className="selected-panel-card panel-card flex flex-col relative overflow-hidden h-full z-20 pointer-events-auto"
       onSubmit={(event) => {
         event.preventDefault();
         saveName();
@@ -694,13 +694,17 @@ function OrbitRing({ priority }: { priority: Priority }) {
   
   return (
     <motion.div
-      className="absolute left-1/2 top-1/2 rounded-full pointer-events-none"
+      className="orbit-track absolute left-1/2 top-1/2 rounded-full pointer-events-none"
       style={{
         x: '-50%',
         y: '-50%',
         width: sizeX,
         height: sizeY,
-        border: '1.5px solid rgba(255,255,255,0.06)',
+        rotateX: 64,
+        rotateZ: -8,
+        transformStyle: 'preserve-3d',
+        border: `1px solid ${priority.hue}30`,
+        boxShadow: `0 0 16px ${priority.hue}12`,
         zIndex: 0
       }}
     />
@@ -719,12 +723,15 @@ function SelectedOrbitRing({ priority }: { priority: Priority }) {
   
   return (
     <motion.div
-      className="absolute left-1/2 top-1/2 rounded-full pointer-events-none z-0"
+      className="orbit-track orbit-track-selected absolute left-1/2 top-1/2 rounded-full pointer-events-none z-0"
       style={{
         x: '-50%',
         y: '-50%',
         width: size,
         height: sizeSquished,
+        rotateX: 64,
+        rotateZ: -8,
+        transformStyle: 'preserve-3d',
         border: '1.5px solid var(--borderColor)',
         boxShadow: '0 0 20px var(--borderColor) inset, 0 0 20px var(--borderColor)',
         opacity: 0.6,
@@ -794,12 +801,14 @@ function OrbComponent({
     const radius = 24 + (10 - u) * 2.8;
     return `${50 + Math.sin(angle) * radius * 0.82}%`;
   });
+
+  const depth = useTransform(() => Math.sin(baseAngle + drift.get()) * 70);
   
   const size = useTransform(() => 35 + importanceSpring.get() * 6);
   
   return (
     <motion.div
-      style={{ left: x, top: y, position: 'absolute', x: '-50%', y: '-50%', zIndex: isSelected ? 10 : isUnrelated ? 1 : 2 }}
+      style={{ left: x, top: y, position: 'absolute', x: '-50%', y: '-50%', z: depth, transformStyle: 'preserve-3d', zIndex: isSelected ? 10 : isUnrelated ? 1 : 2 }}
       initial={{ scale: 0, opacity: 0 }}
       animate={{ 
         scale: isCompleting ? [1, 1.35, 0.15] : 1,
@@ -811,7 +820,7 @@ function OrbComponent({
       transition={isCompleting ? { duration: 0.6, times: [0, 0.4, 1] } : { type: 'spring', damping: 25, stiffness: 200 }}
     >
       <motion.div
-        className={`orb-wrapper ${isSelected ? 'selected' : ''}`}
+        className={`orb-wrapper orb-depth ${isSelected ? 'selected' : ''}`}
         onClick={() => onSelect(priority.id)}
         whileHover={!isCompleting ? { scale: 1.05 } : {}}
       >
@@ -933,10 +942,12 @@ function FocusGalaxyContainer() {
   const { mouseX, mouseY, handleMouseMove, handleMouseLeave } = useParallax();
   const panX = useTransform(mouseX, [-0.5, 0.5], [12, -12]);
   const panY = useTransform(mouseY, [-0.5, 0.5], [12, -12]);
+  const tiltX = useTransform(mouseY, [-0.5, 0.5], prefersReducedMotion ? [0, 0] : [2.5, -2.5]);
+  const tiltY = useTransform(mouseX, [-0.5, 0.5], prefersReducedMotion ? [0, 0] : [-2.5, 2.5]);
 
   return (
     <div 
-      className="relative w-full h-[100dvh] overflow-hidden bg-background select-none"
+      className="focus-galaxy-app relative w-full h-[100dvh] overflow-hidden bg-background select-none"
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
     >
@@ -995,10 +1006,10 @@ function FocusGalaxyContainer() {
       </header>
       
       <motion.div 
-        className="absolute inset-0 z-10"
-        style={{ x: panX, y: panY }}
+        className="galaxy-viewport absolute inset-0 z-10"
+        style={{ x: panX, y: panY, rotateX: tiltX, rotateY: tiltY, transformPerspective: 1400, transformStyle: 'preserve-3d' }}
       >
-        <div className="absolute inset-0 transform-gpu origin-center">
+        <div className="galaxy-layer absolute inset-0 transform-gpu origin-center">
           
           <OrbitRings priorities={priorities} />
 
@@ -1011,7 +1022,6 @@ function FocusGalaxyContainer() {
           <motion.div
             className="absolute left-1/2 top-[44%] -translate-x-1/2 -translate-y-1/2 w-[132px] h-[132px] md:w-[150px] md:h-[150px] z-10"
           >
-            <div className="core-glow" />
             <div className="core-body" />
             <div className="core-text">
               <span className="core-title">YOU / NOW</span>
@@ -1039,7 +1049,7 @@ function FocusGalaxyContainer() {
       <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-background via-background/80 to-transparent pointer-events-none z-10" />
 
       <motion.div
-        className="absolute -bottom-1 left-6 right-6 flex flex-col xl:flex-row items-end xl:items-stretch justify-center gap-6 z-20 pointer-events-none"
+        className="insight-dock absolute bottom-28 left-6 right-6 flex flex-col xl:flex-row items-end xl:items-end justify-center gap-8 z-20 pointer-events-none"
         animate={{ y: panelsOpen ? 0 : 250 }}
         transition={{ type: 'spring', stiffness: 180, damping: 24 }}
       >
@@ -1053,7 +1063,7 @@ function FocusGalaxyContainer() {
           {panelsOpen ? 'Focus on galaxy' : 'Show insights'}
         </button>
         
-        <div className="w-full xl:w-[360px] shrink-0 transform-gpu transition-all duration-500 hidden md:block">
+        <div className="panel-slot panel-slot-signal w-full xl:w-[min(30vw,400px)] shrink-0 transform-gpu transition-all duration-500 hidden md:block">
            <FocusSignalPanel 
              topPriorities={topPriorities} 
               onSelect={selectPriority}
@@ -1062,7 +1072,7 @@ function FocusGalaxyContainer() {
            />
         </div>
         
-        <div className="w-full xl:w-[360px] shrink-0 transform-gpu transition-all duration-500 hidden md:block">
+        <div className="panel-slot panel-slot-insight w-full xl:w-[min(30vw,400px)] shrink-0 transform-gpu transition-all duration-500 hidden md:block">
            <InsightPanel 
              insight={insight} 
              priority={selectedPriority || topPriorities[0]} 
@@ -1070,7 +1080,7 @@ function FocusGalaxyContainer() {
         </div>
         
         {selectedId && (
-          <div className="w-full xl:w-[360px] shrink-0 transform-gpu transition-all duration-500">
+          <div className="panel-slot panel-slot-selected w-full xl:w-[min(30vw,400px)] shrink-0 transform-gpu transition-all duration-500">
              <SelectedPanel 
                priority={selectedPriority}
                onUpdate={(metric, val) => updatePriority(selectedId, metric, val)}

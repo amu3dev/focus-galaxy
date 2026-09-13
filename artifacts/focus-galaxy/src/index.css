@@ -37,42 +37,49 @@ body {
 .bg-stars {
   position: fixed;
   inset: 0;
+  overflow: hidden;
+  pointer-events: none;
   background-color: #030208;
-  background-image: 
-    radial-gradient(circle at 50% 46%, rgba(88, 45, 124, 0.46) 0%, transparent 43%),
-    radial-gradient(ellipse at 82% 18%, rgba(88, 54, 156, 0.34) 0%, transparent 42%),
-    radial-gradient(ellipse at 18% 78%, rgba(196, 51, 119, 0.23) 0%, transparent 46%),
-    radial-gradient(circle at 8% 22%, rgba(42, 92, 184, 0.28) 0%, transparent 38%),
-    radial-gradient(ellipse at 72% 90%, rgba(240, 140, 50, 0.16) 0%, transparent 48%);
-  z-index: -1;
+  background-image:
+    radial-gradient(ellipse at 50% 43%, rgba(126, 61, 210, 0.36) 0%, rgba(65, 38, 133, 0.15) 28%, transparent 58%),
+    radial-gradient(ellipse at 7% 56%, rgba(21, 94, 202, 0.28) 0%, transparent 37%),
+    radial-gradient(ellipse at 93% 57%, rgba(226, 44, 154, 0.24) 0%, transparent 36%),
+    radial-gradient(ellipse at 50% 112%, rgba(247, 133, 48, 0.23) 0%, transparent 44%),
+    radial-gradient(ellipse at 72% 12%, rgba(94, 66, 188, 0.24) 0%, transparent 38%);
+  z-index: 0;
 }
 
 .bg-stars::before {
   content: '';
   position: absolute;
   inset: 0;
-  background-image: 
+  background-image:
     radial-gradient(1.5px 1.5px at 10% 10%, #fff 100%, transparent),
-    radial-gradient(2px 2px at 20% 30%, rgba(255,255,255,0.8) 100%, transparent),
+    radial-gradient(2px 2px at 20% 30%, rgba(255,255,255,0.86) 100%, transparent),
     radial-gradient(2.5px 2.5px at 40% 70%, rgba(255,200,200,0.9) 100%, transparent),
     radial-gradient(1.5px 1.5px at 60% 20%, #fff 100%, transparent),
-    radial-gradient(2px 2px at 80% 80%, rgba(200,200,255,0.8) 100%, transparent),
+    radial-gradient(2px 2px at 80% 80%, rgba(200,200,255,0.86) 100%, transparent),
     radial-gradient(2.5px 2.5px at 90% 40%, rgba(255,255,255,0.9) 100%, transparent),
-    radial-gradient(3px 3px at 30% 90%, #fff 100%, transparent);
-  background-size: 250px 250px;
-  opacity: 0.5;
-  z-index: -1;
+    radial-gradient(3px 3px at 30% 90%, #fff 100%, transparent),
+    radial-gradient(1px 1px at 5% 75%, rgba(118,182,255,0.95) 100%, transparent),
+    radial-gradient(1px 1px at 68% 56%, rgba(255,148,222,0.9) 100%, transparent);
+  background-size: 250px 250px, 370px 370px;
+  opacity: 0.68;
+  mix-blend-mode: screen;
 }
 
 .bg-stars::after {
   content: '';
   position: absolute;
-  inset: 0;
+  inset: -12%;
   background-image:
-    radial-gradient(ellipse at 15% 58%, rgba(69, 41, 142, 0.28), transparent 35%),
-    radial-gradient(ellipse at 86% 55%, rgba(24, 95, 164, 0.26), transparent 34%),
-    radial-gradient(ellipse at 50% 104%, rgba(216, 73, 133, 0.2), transparent 43%),
-    url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.035'/%3E%3C/svg%3E");
+    radial-gradient(ellipse at 16% 57%, rgba(39, 84, 214, 0.34), transparent 34%),
+    radial-gradient(ellipse at 86% 56%, rgba(22, 130, 214, 0.25), transparent 34%),
+    radial-gradient(ellipse at 50% 102%, rgba(239, 71, 153, 0.25), transparent 42%),
+    conic-gradient(from 210deg at 50% 48%, transparent 0deg 38deg, rgba(173, 76, 238, 0.1) 50deg, transparent 67deg 155deg, rgba(232, 68, 157, 0.1) 170deg, transparent 190deg 300deg, rgba(70, 123, 245, 0.1) 315deg, transparent 336deg),
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
+  filter: blur(10px);
+  opacity: 0.86;
   pointer-events: none;
   mix-blend-mode: screen;
 }
@@ -91,41 +98,100 @@ body {
 
 /* Panel Glassmorphism */
 .panel-card {
-  background: rgba(15, 12, 31, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(30px);
-  -webkit-backdrop-filter: blur(30px);
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  transform-style: preserve-3d;
+  background: linear-gradient(145deg, rgba(34, 22, 61, 0.72), rgba(9, 10, 24, 0.72) 58%, rgba(29, 14, 48, 0.68));
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  backdrop-filter: blur(30px) saturate(135%);
+  -webkit-backdrop-filter: blur(30px) saturate(135%);
   border-radius: 20px;
-  padding: 24px;
-  box-shadow: 
-    0 10px 40px -10px rgba(0,0,0,0.8),
-    inset 0 1px 0 rgba(255,255,255,0.1),
+  padding: 20px;
+  box-shadow:
+    0 18px 55px -18px rgba(0,0,0,0.92),
+    inset 0 1px 0 rgba(255,255,255,0.16),
+    inset 0 -18px 35px rgba(0,0,0,0.18),
     0 0 25px 0 var(--panel-glow, transparent),
-    inset 0 0 20px 0 var(--panel-glow-inset, transparent);
+    inset 0 0 24px 0 var(--panel-glow-inset, transparent);
   transition: box-shadow 0.3s ease, border-color 0.3s ease;
 }
+.panel-card::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border-radius: 19px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: linear-gradient(125deg, rgba(255,255,255,0.1), transparent 25%, transparent 72%, rgba(255,255,255,0.04));
+  pointer-events: none;
+  z-index: 0;
+}
+.panel-card::after {
+  content: '';
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: -28px;
+  height: 55px;
+  border-radius: 50%;
+  background: var(--panel-glow, rgba(155,91,228,0.2));
+  filter: blur(22px);
+  opacity: 0.6;
+  pointer-events: none;
+  z-index: 0;
+}
 
-/* Orbits */
+/* Pseudo-3D scene */
+.focus-galaxy-app {
+  isolation: isolate;
+  perspective: 1600px;
+}
+.galaxy-viewport,
+.galaxy-layer,
+.insight-dock,
+.panel-slot,
+.orbit-depth {
+  transform-style: preserve-3d;
+}
+.galaxy-viewport {
+  perspective: 1400px;
+  transform-origin: 50% 44%;
+  will-change: transform;
+}
+.galaxy-layer {
+  transform: translate3d(0, -12%, 0);
+  will-change: transform;
+}
+.insight-dock {
+  perspective: 1400px;
+  transform-origin: 50% 100%;
+}
+.panel-slot {
+  will-change: transform;
+}
+
+@media (min-width: 1280px) {
+  .panel-slot-signal,
+  .panel-slot-selected { height: 310px; }
+  .panel-slot-insight { height: 290px; }
+  .panel-slot-insight > .panel-card { height: 100%; min-height: 0; }
+  .panel-slot-signal { transform: translateZ(22px) rotateZ(-3deg) rotateX(2deg); }
+  .panel-slot-insight { transform: translateZ(58px) rotateX(1deg); }
+  .panel-slot-selected { transform: translateZ(22px) rotateZ(3deg) rotateX(2deg); }
+  .selected-panel-card { padding: 10px; }
+  .selected-panel-card > div:first-child { margin-bottom: 6px; }
+  .selected-panel-card > div:nth-of-type(2) { gap: 6px; }
+  .selected-panel-card > div:nth-of-type(3) { margin-top: 6px; }
+  .selected-panel-card > button:last-child { height: 24px; margin-top: 0; }
+  .selected-panel-card .w-12.h-12 { width: 36px; height: 36px; }
+}
+
 .core-body {
   position: absolute;
   inset: 0;
   border-radius: 50%;
   background: radial-gradient(circle at 35% 35%, #ffffff 0%, #ffdf80 20%, #f79622 65%, #c24d0d 95%);
-  box-shadow: 
-    inset -10px -10px 25px rgba(0,0,0,0.6),
-    inset 4px 4px 15px rgba(255,255,255,0.9),
-    0 0 60px 15px rgba(247,150,34,0.6),
-    0 0 120px 30px rgba(247,150,34,0.3);
   z-index: 1;
-}
-.core-glow {
-  position: absolute;
-  inset: -60%;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(247,150,34,0.35) 0%, rgba(247,150,34,0.05) 50%, transparent 70%);
-  filter: blur(15px);
-  z-index: 0;
-  animation: core-pulse 4s ease-in-out infinite alternate;
 }
 .core-text {
   position: relative;
@@ -156,11 +222,6 @@ body {
   letter-spacing: 0.05em;
   margin-top: 4px;
 }
-@keyframes core-pulse {
-  0% { transform: scale(0.95); opacity: 0.8; }
-  100% { transform: scale(1.05); opacity: 1; }
-}
-
 .orb-wrapper {
   display: flex;
   flex-direction: column;
@@ -168,6 +229,7 @@ body {
   gap: 8px;
   cursor: pointer;
   position: relative;
+  transform-style: preserve-3d;
 }
 
 .orb-planet {
@@ -186,6 +248,19 @@ body {
     0 0 30px 2px color-mix(in srgb, var(--orb-color), transparent 60%);
   position: relative;
   transition: all 0.3s ease;
+}
+
+.orb-planet::before {
+  content: '';
+  position: absolute;
+  inset: -16%;
+  border: 1px solid color-mix(in srgb, var(--orb-color), transparent 45%);
+  border-left-color: transparent;
+  border-right-color: color-mix(in srgb, var(--orb-color), white 20%);
+  border-radius: 50%;
+  transform: rotateX(66deg) rotateZ(-12deg) scaleX(1.35);
+  opacity: 0.58;
+  pointer-events: none;
 }
 
 .orb-planet::after {
