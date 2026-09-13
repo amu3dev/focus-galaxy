@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, memo, type CSSProperties, type FormEvent } from 'react';
-import { Plus, RotateCcw, X, Target, Activity, Orbit, Trash2, ListChecks, Volume2, VolumeX, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, RotateCcw, X, Target, Activity, Orbit, Trash2, ListChecks, Volume2, VolumeX, CheckCircle2, ChevronDown, ChevronUp, SunMedium } from 'lucide-react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -246,21 +246,23 @@ function RangeControl({
         <span className="text-white/60 group-hover:text-white/80 transition-colors uppercase tracking-widest font-semibold">{label}</span>
         <span className="font-sans font-bold text-white text-[13px]">{value}</span>
       </div>
-      <div className="relative h-[6px] bg-white/10 rounded-full w-full flex items-center">
-        <motion.div 
-           className="absolute left-0 h-full rounded-full" 
-           style={{ backgroundColor: color, boxShadow: `0 0 10px ${color}` }}
-           animate={{ width: `${(value/10)*100}%` }}
-           transition={{ type: 'spring', damping: 20, stiffness: 200 }}
-        />
+      <div className="relative h-7 w-full flex items-center">
+        <div className="range-track absolute left-0 right-0 h-[6px] rounded-full">
+          <motion.div
+             className="absolute left-0 h-full rounded-full"
+             style={{ backgroundColor: color, boxShadow: `0 0 10px ${color}` }}
+             animate={{ width: `${(value/10)*100}%` }}
+             transition={{ type: 'spring', damping: 20, stiffness: 200 }}
+          />
+        </div>
         <input 
           type="range" min="1" max="10" step="1" value={value} 
           aria-label={label}
           onChange={(e) => onChange(Number(e.target.value))}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+          className="metric-range absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
         />
         <motion.div 
-          className="absolute w-4 h-4 rounded-full bg-white shadow-[0_0_10px_var(--c)] pointer-events-none"
+          className="absolute top-1/2 w-4 h-4 rounded-full bg-white shadow-[0_0_10px_var(--c)] pointer-events-none -translate-y-1/2"
           style={{ '--c': color } as any}
           animate={{ left: `calc(${(value/10)*100}% - 8px)` }}
           transition={{ type: 'spring', damping: 20, stiffness: 200 }}
@@ -519,28 +521,30 @@ function SelectedPanel({
         </button>
       </div>
       
-      <div className="flex flex-col gap-5 mt-auto">
+      <div className="flex flex-col gap-5 mt-4">
          <RangeControl label="Importance" value={priority.importance} color={priority.hue} onChange={(v) => onUpdate('importance', v)} />
          <RangeControl label="Urgency" value={priority.urgency} color={priority.hue} onChange={(v) => onUpdate('urgency', v)} />
          <RangeControl label="Energy / Effort" value={priority.energy} color={priority.hue} onChange={(v) => onUpdate('energy', v)} />
       </div>
       
-      <div className="flex items-center gap-3 mt-8">
+      <div className="flex items-center gap-3 mt-5">
         <button type="button" onClick={() => { if(window.confirm('Remove this priority?')) onRemove() }} aria-label="Delete priority" className="w-10 h-10 rounded-xl border border-white/10 bg-white/5 text-white/40 flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 transition-colors">
           <Trash2 size={16} />
         </button>
          <button type="submit" className="flex-1 h-10 rounded-xl border border-white/10 bg-white/5 text-[13px] font-bold text-white hover:bg-white/10 transition-colors">
-          Save Changes
+          Save Name
+        </button>
+        <button
+          type="button"
+          onClick={onComplete}
+          aria-label="Complete task"
+          title="Complete task"
+          className="complete-task-corner flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-400/40 bg-emerald-400/12 text-emerald-300 transition-colors hover:border-emerald-300/80 hover:bg-emerald-400/25 hover:text-emerald-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70"
+        >
+          <CheckCircle2 size={17} />
         </button>
       </div>
-       <button
-         type="button"
-         onClick={onComplete}
-         className="mt-3 h-10 w-full rounded-xl border border-emerald-400/30 bg-emerald-400/10 text-[13px] font-bold text-emerald-300 hover:border-emerald-300/60 hover:bg-emerald-400/20 transition-colors flex items-center justify-center gap-2"
-       >
-         <Check size={16} /> Complete Task
-       </button>
-    </form>
+   </form>
   );
 }
 
@@ -655,7 +659,7 @@ const Particles = memo(function Particles() {
   })), []);
 
   return (
-    <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+    <div className="cosmos-particles absolute inset-0 pointer-events-none overflow-hidden z-0">
       {particles.map((p) => (
         <div
           key={p.id}
@@ -808,6 +812,7 @@ function OrbComponent({
   
   return (
     <motion.div
+      className="orb-hit-container"
       style={{ left: x, top: y, position: 'absolute', x: '-50%', y: '-50%', z: depth, transformStyle: 'preserve-3d', zIndex: isSelected ? 10 : isUnrelated ? 1 : 2 }}
       initial={{ scale: 0, opacity: 0 }}
       animate={{ 
@@ -819,10 +824,13 @@ function OrbComponent({
       }}
       transition={isCompleting ? { duration: 0.6, times: [0, 0.4, 1] } : { type: 'spring', damping: 25, stiffness: 200 }}
     >
-      <motion.div
-        className={`orb-wrapper orb-depth ${isSelected ? 'selected' : ''}`}
+      <motion.button
+        type="button"
+        className={`orb-wrapper orb-depth pointer-events-auto ${isSelected ? 'selected' : ''}`}
+        aria-label={`Select ${priority.name}`}
         onClick={() => onSelect(priority.id)}
         whileHover={!isCompleting ? { scale: 1.05 } : {}}
+        whileTap={!isCompleting ? { scale: 0.98 } : {}}
       >
         <div className="relative">
           <div className="absolute -top-3 -right-3 px-2 py-0.5 rounded-full text-[10px] font-bold font-display z-20 text-white" style={{
@@ -848,8 +856,35 @@ function OrbComponent({
             {getSubLabel(priority.name)}
           </span>
         </div>
-      </motion.div>
+      </motion.button>
     </motion.div>
+  );
+}
+
+function CosmosBrightnessControl({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="cosmos-brightness-control" title="Adjust Cosmos brightness">
+      <SunMedium size={15} aria-hidden="true" />
+      <label htmlFor="cosmos-brightness" className="sr-only">Cosmos brightness</label>
+      <input
+        id="cosmos-brightness"
+        type="range"
+        min="45"
+        max="130"
+        step="1"
+        value={value}
+        aria-label="Cosmos brightness"
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="cosmos-brightness-range"
+      />
+      <output htmlFor="cosmos-brightness" className="cosmos-brightness-value">{value}%</output>
+    </div>
   );
 }
 
@@ -860,6 +895,7 @@ function FocusGalaxyContainer() {
   const [isManageOpen, setIsManageOpen] = useState(false);
   const [panelsOpen, setPanelsOpen] = useState(true);
   const [completingId, setCompletingId] = useState<string | null>(null);
+  const [cosmosBrightness, setCosmosBrightness] = useState(100);
   
   const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -944,10 +980,19 @@ function FocusGalaxyContainer() {
   const panY = useTransform(mouseY, [-0.5, 0.5], [12, -12]);
   const tiltX = useTransform(mouseY, [-0.5, 0.5], prefersReducedMotion ? [0, 0] : [2.5, -2.5]);
   const tiltY = useTransform(mouseX, [-0.5, 0.5], prefersReducedMotion ? [0, 0] : [-2.5, 2.5]);
+  const brightnessRatio = cosmosBrightness / 100;
+  const cosmosVisualStyle = {
+    '--cosmos-bg-opacity': String(Math.min(1, 0.55 + brightnessRatio * 0.45)),
+    '--cosmos-star-opacity': String(Math.min(1, 0.45 + brightnessRatio * 0.55)),
+    '--cosmos-scene-opacity': String(Math.min(1, 0.5 + brightnessRatio * 0.5)),
+    '--cosmos-dim-opacity': String(Math.max(0, (100 - cosmosBrightness) / 100 * 0.55)),
+    '--cosmos-lift-opacity': String(Math.max(0, (cosmosBrightness - 100) / 30 * 0.32)),
+  } as CSSProperties;
 
   return (
     <div 
       className="focus-galaxy-app relative w-full h-[100dvh] overflow-hidden bg-background select-none"
+      style={cosmosVisualStyle}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
     >
@@ -982,7 +1027,7 @@ function FocusGalaxyContainer() {
           <span className="text-[11px] text-white/60 font-medium ml-1">Turn your priorities into clarity.</span>
         </div>
         
-        <div className="flex items-center gap-4 mt-4 md:mt-0 pointer-events-auto">
+        <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-4 mt-4 md:mt-0 pointer-events-auto">
           <div className="hidden md:flex items-center rounded-full bg-white/5 border border-white/10 p-1 backdrop-blur-md">
             <button className="px-5 py-1.5 rounded-full bg-primary/20 text-white text-[11px] font-bold shadow-[0_0_10px_rgba(155,91,228,0.3)]">Today</button>
             <button className="px-4 py-1.5 rounded-full text-white/50 hover:text-white transition-colors text-[11px] font-bold">This Week</button>
@@ -995,6 +1040,8 @@ function FocusGalaxyContainer() {
 
           <FocusAudio />
 
+          <CosmosBrightnessControl value={cosmosBrightness} onChange={setCosmosBrightness} />
+
           <button onClick={() => setIsManageOpen(true)} aria-label="Manage priorities" className="hidden lg:flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-xs font-bold transition-colors">
             <ListChecks size={15} /> Manage
           </button>
@@ -1006,10 +1053,10 @@ function FocusGalaxyContainer() {
       </header>
       
       <motion.div 
-        className="galaxy-viewport absolute inset-0 z-10"
+        className="galaxy-viewport absolute inset-0 z-10 pointer-events-none"
         style={{ x: panX, y: panY, rotateX: tiltX, rotateY: tiltY, transformPerspective: 1400, transformStyle: 'preserve-3d' }}
       >
-        <div className="galaxy-layer absolute inset-0 transform-gpu origin-center">
+        <div className="galaxy-layer absolute inset-0 transform-gpu origin-center pointer-events-none">
           
           <OrbitRings priorities={priorities} />
 
@@ -1045,6 +1092,9 @@ function FocusGalaxyContainer() {
           
         </div>
       </motion.div>
+
+      <div className="cosmos-dim-layer absolute inset-0 z-[15] pointer-events-none" aria-hidden="true" />
+      <div className="cosmos-lift-layer absolute inset-0 z-[15] pointer-events-none" aria-hidden="true" />
       
       <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-background via-background/80 to-transparent pointer-events-none z-10" />
 
