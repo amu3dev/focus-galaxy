@@ -255,6 +255,7 @@ function RangeControl({
         />
         <input 
           type="range" min="1" max="10" step="1" value={value} 
+          aria-label={label}
           onChange={(e) => onChange(Number(e.target.value))}
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
         />
@@ -340,6 +341,14 @@ function ManageTasksDialog({
   onSelect: (id: string) => void;
   onRename: (id: string, name: string) => void;
 }) {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
     <motion.div
       className="fixed inset-0 z-50 grid place-items-center p-4 bg-background/60 backdrop-blur-sm"
@@ -364,7 +373,7 @@ function ManageTasksDialog({
             <h2 id="manage-tasks-title" className="font-display text-xl font-bold text-white tracking-wide">Manage priorities</h2>
             <p className="text-white/60 text-xs mt-1.5 font-medium">Rename any pre-listed or added planet.</p>
           </div>
-          <button type="button" onClick={onClose} className="w-8 h-8 rounded-full bg-white/5 border border-white/10 text-white/60 flex items-center justify-center hover:text-white hover:bg-white/10 transition-colors">
+          <button type="button" onClick={onClose} aria-label="Close dialog" className="w-8 h-8 rounded-full bg-white/5 border border-white/10 text-white/60 flex items-center justify-center hover:text-white hover:bg-white/10 transition-colors">
             <X size={16} />
           </button>
         </div>
@@ -433,18 +442,6 @@ function InsightPanel({ insight, priority }: { insight: string, priority?: Prior
         {insight}
       </p>
       
-      {priority && (
-        <button 
-          className="mt-6 flex items-center gap-2 px-6 py-2.5 rounded-full border text-[12px] font-bold text-white transition-colors z-10 tracking-wide"
-          style={{
-            backgroundColor: `${priority.hue}30`,
-            borderColor: `${priority.hue}60`,
-            boxShadow: `0 0 15px ${priority.hue}40`,
-          }}
-        >
-          <Orbit size={14} /> Explore Scenarios
-        </button>
-      )}
     </div>
   );
 }
@@ -454,12 +451,14 @@ function SelectedPanel({
   onUpdate,
   onRename,
   onComplete,
+  onClose,
   onRemove,
 }: {
   priority?: Priority;
   onUpdate: (metric: MetricKey, val: number) => void;
   onRename: (name: string) => void;
   onComplete: () => void;
+  onClose: () => void;
   onRemove: () => void;
 }) {
   const [name, setName] = useState(priority?.name ?? '');
@@ -515,7 +514,7 @@ function SelectedPanel({
             </span>
           </div>
         </div>
-        <button type="button" onClick={() => onRemove()} className="text-white/40 hover:text-white transition-colors p-1" aria-label="Close panel">
+        <button type="button" onClick={onClose} className="text-white/40 hover:text-white transition-colors p-1" aria-label="Close panel">
            <X size={18} />
         </button>
       </div>
@@ -527,7 +526,7 @@ function SelectedPanel({
       </div>
       
       <div className="flex items-center gap-3 mt-8">
-        <button type="button" onClick={() => { if(window.confirm('Remove this priority?')) onRemove() }} className="w-10 h-10 rounded-xl border border-white/10 bg-white/5 text-white/40 flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 transition-colors">
+        <button type="button" onClick={() => { if(window.confirm('Remove this priority?')) onRemove() }} aria-label="Delete priority" className="w-10 h-10 rounded-xl border border-white/10 bg-white/5 text-white/40 flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 transition-colors">
           <Trash2 size={16} />
         </button>
          <button type="submit" className="flex-1 h-10 rounded-xl border border-white/10 bg-white/5 text-[13px] font-bold text-white hover:bg-white/10 transition-colors">
@@ -585,6 +584,7 @@ function AddPriorityDialog({
         onSubmit={submit} 
         role="dialog" 
         aria-modal="true"
+        aria-labelledby="add-priority-title"
         initial={{ scale: 0.95, y: 15, opacity: 0 }}
         animate={{ scale: 1, y: 0, opacity: 1 }}
         exit={{ scale: 0.95, y: 10, opacity: 0 }}
@@ -592,11 +592,12 @@ function AddPriorityDialog({
       >
         <div className="flex justify-between gap-5 mb-6">
           <div>
-            <h2 className="font-display text-xl font-bold m-0 text-white tracking-wide">New body</h2>
+            <h2 id="add-priority-title" className="font-display text-xl font-bold m-0 text-white tracking-wide">New body</h2>
             <p className="text-white/60 text-xs mt-1.5 font-medium">Give the next thing a place in your sky.</p>
           </div>
           <motion.button 
             type="button" 
+            aria-label="Close dialog"
             className="w-8 h-8 rounded-full bg-white/5 border border-white/10 text-white/60 flex items-center justify-center hover:text-white hover:bg-white/10 transition-colors self-start" 
             onClick={onClose} 
             whileHover={{ scale: 1.1 }}
@@ -977,13 +978,13 @@ function FocusGalaxyContainer() {
             <button className="px-4 py-1.5 rounded-full text-white/50 hover:text-white transition-colors text-[11px] font-bold">This Month</button>
           </div>
           
-          <button onClick={() => setIsAddOpen(true)} className="flex items-center gap-2 px-5 py-2 rounded-full border border-primary/50 bg-primary/20 hover:bg-primary/30 text-white text-xs font-bold transition-colors shadow-[0_0_15px_rgba(155,91,228,0.3)]">
+          <button onClick={() => setIsAddOpen(true)} aria-label="Add priority" className="flex items-center gap-2 px-5 py-2 rounded-full border border-primary/50 bg-primary/20 hover:bg-primary/30 text-white text-xs font-bold transition-colors shadow-[0_0_15px_rgba(155,91,228,0.3)]">
             <Plus size={14} strokeWidth={3} /> Add Priority
           </button>
 
           <FocusAudio />
 
-          <button onClick={() => setIsManageOpen(true)} className="hidden lg:flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-xs font-bold transition-colors">
+          <button onClick={() => setIsManageOpen(true)} aria-label="Manage priorities" className="hidden lg:flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-xs font-bold transition-colors">
             <ListChecks size={15} /> Manage
           </button>
           
@@ -1075,6 +1076,7 @@ function FocusGalaxyContainer() {
                onUpdate={(metric, val) => updatePriority(selectedId, metric, val)}
                onRename={(name) => renamePriority(selectedId, name)}
                onComplete={() => completePriority(selectedId)}
+               onClose={() => setSelectedId(null)}
                onRemove={() => removePriority(selectedId)}
              />
           </div>
