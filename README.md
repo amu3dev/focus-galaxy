@@ -37,6 +37,16 @@ pnpm run typecheck
 pnpm run build
 ```
 
+## Optional Spotify playback
+
+Spotify playback is opt-in. Create a Spotify Developer app, add the exact URL where Focus Galaxy runs to its Redirect URI allowlist, then set the public client ID in `.env.local`:
+
+```bash
+VITE_SPOTIFY_CLIENT_ID=your_client_id
+```
+
+The app uses Authorization Code with PKCE, so no Spotify client secret belongs in the frontend. A user must explicitly authorize the app, and browser playback requires Spotify Premium; the built-in generated focus music remains available when Spotify is not configured or supported.
+
 ## Project structure
 
 ```text

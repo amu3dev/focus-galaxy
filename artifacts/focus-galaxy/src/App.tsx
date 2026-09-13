@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, memo, type CSSProperties, type FormEvent } from 'react';
-import { Plus, RotateCcw, X, Target, Activity, Orbit, Trash2, ListChecks, Volume2, VolumeX, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, RotateCcw, X, Target, Activity, Orbit, Trash2, ListChecks, Volume2, VolumeX, Music2, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -19,7 +19,182 @@ type Priority = {
 type MetricKey = 'importance' | 'urgency' | 'energy';
 
 const STORAGE_KEY = 'focus-galaxy-priorities-v2';
+const SPOTIFY_SESSION_KEY = 'focus-galaxy-spotify-session';
+const SPOTIFY_VERIFIER_KEY = 'focus-galaxy-spotify-verifier';
+const SPOTIFY_STATE_KEY = 'focus-galaxy-spotify-state';
+const SPOTIFY_SCOPE = 'streaming user-read-playback-state user-modify-playback-state';
+const spotifyClientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID?.trim() ?? '';
 const queryClient = new QueryClient();
+
+type SpotifySession = {
+  accessToken: string;
+  expiresAt: number;
+  refreshToken?: string;
+};
+
+type SpotifyPlayerState = {
+  paused: boolean;
+};
+
+type SpotifyPlayer = {
+  addListener: (event: string, callback: (data?: any) => void) => boolean;
+  connect: () => Promise<boolean>;
+  disconnect: () => void;
+  getCurrentState: () => Promise<SpotifyPlayerState | null>;
+  pause: () => Promise<void>;
+  togglePlay: () => Promise<void>;
+};
+
+type SpotifySdk = {
+  Player: new (options: {
+    name: string;
+    getOAuthToken: (callback: (token: string) => void) => void;
+    volume: number;
+  }) => SpotifyPlayer;
+};
+
+type SpotifyWindow = Window & {
+  Spotify?: SpotifySdk;
+  onSpotifyWebPlaybackSDKReady?: () => void;
+};
+
+let spotifySdkPromise: Promise<SpotifySdk> | null = null;
+
+function getSpotifyRedirectUri() {
+  return `${window.location.origin}${window.location.pathname}`;
+}
+
+function encodeBase64Url(bytes: Uint8Array) {
+  let binary = '';
+  bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+}
+
+function createCodeVerifier() {
+  const bytes = new Uint8Array(64);
+  crypto.getRandomValues(bytes);
+  return encodeBase64Url(bytes);
+}
+
+async function createCodeChallenge(verifier: string) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+  return encodeBase64Url(new Uint8Array(digest));
+}
+
+function readSpotifySession(): SpotifySession | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const session = JSON.parse(window.sessionStorage.getItem(SPOTIFY_SESSION_KEY) || 'null') as SpotifySession | null;
+    return session?.accessToken && session.expiresAt ? session : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSpotifySession(session: SpotifySession | null) {
+  if (typeof window === 'undefined') return;
+  if (session) window.sessionStorage.setItem(SPOTIFY_SESSION_KEY, JSON.stringify(session));
+  else window.sessionStorage.removeItem(SPOTIFY_SESSION_KEY);
+}
+
+async function spotifyRequest(path: string, token: string, init?: RequestInit) {
+  const response = await fetch(`https://api.spotify.com/v1${path}`, {
+    ...init,
+    headers: { Authorization: `Bearer ${token}`, ...init?.headers },
+  });
+  if (!response.ok) throw new Error(`Spotify request failed: ${response.status}`);
+  return response.status === 204 ? null : response.json();
+}
+
+async function loadSpotifySdk() {
+  const spotifyWindow = window as SpotifyWindow;
+  if (spotifyWindow.Spotify?.Player) return spotifyWindow.Spotify;
+  if (spotifySdkPromise) return spotifySdkPromise;
+
+  spotifySdkPromise = new Promise<SpotifySdk>((resolve, reject) => {
+    const timeout = window.setTimeout(() => reject(new Error('Spotify SDK timed out')), 10000);
+    const finish = (error?: Error) => {
+      window.clearTimeout(timeout);
+      if (error) reject(error);
+      else if (spotifyWindow.Spotify?.Player) resolve(spotifyWindow.Spotify);
+      else reject(new Error('Spotify SDK unavailable'));
+    };
+    spotifyWindow.onSpotifyWebPlaybackSDKReady = () => finish();
+    const script = document.querySelector<HTMLScriptElement>('script[data-focus-galaxy-spotify-sdk]') || document.createElement('script');
+    if (!script.src) {
+      script.dataset.focusGalaxySpotifySdk = 'true';
+      script.src = 'https://sdk.scdn.co/spotify-player.js';
+      script.async = true;
+      script.addEventListener('error', () => finish(new Error('Spotify SDK failed to load')), { once: true });
+      document.head.appendChild(script);
+    }
+    if ((spotifyWindow.Spotify?.Player)) finish();
+  });
+  return spotifySdkPromise;
+}
+
+async function exchangeSpotifyCode(code: string, verifier: string) {
+  const body = new URLSearchParams({
+    client_id: spotifyClientId,
+    grant_type: 'authorization_code',
+    code,
+    redirect_uri: getSpotifyRedirectUri(),
+    code_verifier: verifier,
+  });
+  const response = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+  if (!response.ok) throw new Error('Spotify authorization failed');
+  const token = await response.json() as { access_token: string; expires_in: number; refresh_token?: string };
+  return {
+    accessToken: token.access_token,
+    expiresAt: Date.now() + token.expires_in * 1000,
+    refreshToken: token.refresh_token,
+  } satisfies SpotifySession;
+}
+
+async function refreshSpotifySession(session: SpotifySession) {
+  if (!session.refreshToken) throw new Error('Spotify session expired');
+  const body = new URLSearchParams({
+    client_id: spotifyClientId,
+    grant_type: 'refresh_token',
+    refresh_token: session.refreshToken,
+  });
+  const response = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+  if (!response.ok) throw new Error('Spotify session refresh failed');
+  const token = await response.json() as { access_token: string; expires_in: number; refresh_token?: string };
+  return {
+    accessToken: token.access_token,
+    expiresAt: Date.now() + token.expires_in * 1000,
+    refreshToken: token.refresh_token || session.refreshToken,
+  } satisfies SpotifySession;
+}
+
+async function startSpotifyAuthorization() {
+  const verifier = createCodeVerifier();
+  const state = createCodeVerifier();
+  const challenge = await createCodeChallenge(verifier);
+  window.sessionStorage.setItem(SPOTIFY_VERIFIER_KEY, verifier);
+  window.sessionStorage.setItem(SPOTIFY_STATE_KEY, state);
+  const authorizeUrl = new URL('https://accounts.spotify.com/authorize');
+  authorizeUrl.search = new URLSearchParams({
+    client_id: spotifyClientId,
+    response_type: 'code',
+    redirect_uri: getSpotifyRedirectUri(),
+    code_challenge_method: 'S256',
+    code_challenge: challenge,
+    state,
+    scope: SPOTIFY_SCOPE,
+  }).toString();
+  window.location.assign(authorizeUrl.toString());
+}
+
 
 const seedPriorities: Priority[] = [
   { id: 'job-search', name: 'Job Search', importance: 8, urgency: 9, energy: 7, hue: '#f04e76' },
@@ -96,10 +271,18 @@ function AppLogo() {
 function FocusAudio() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [style, setStyle] = useState<'classical' | 'baroque' | 'nocturne'>('classical');
+  const [audioSource, setAudioSource] = useState<'local' | 'spotify'>('local');
+  const [spotifyStatus, setSpotifyStatus] = useState<'unavailable' | 'idle' | 'connecting' | 'ready' | 'playing' | 'error'>(() => spotifyClientId ? 'idle' : 'unavailable');
+  const [spotifyIsPlaying, setSpotifyIsPlaying] = useState(false);
+  const [spotifyMessage, setSpotifyMessage] = useState('');
   const audioRef = useRef<{
     context: AudioContext;
     timer: number;
   } | null>(null);
+  const spotifySessionRef = useRef<SpotifySession | null>(readSpotifySession());
+  const spotifyPlayerRef = useRef<SpotifyPlayer | null>(null);
+  const spotifyDeviceIdRef = useRef<string | null>(null);
+  const disposedRef = useRef(false);
 
   const stopAudio = () => {
     const audio = audioRef.current;
@@ -111,6 +294,7 @@ function FocusAudio() {
   };
 
   const startAudio = () => {
+    if (audioRef.current) return;
     const AudioContextClass = window.AudioContext;
     const context = new AudioContextClass();
     const master = context.createGain();
@@ -193,30 +377,222 @@ function FocusAudio() {
     setIsPlaying(true);
   };
 
+  const getSpotifyAccessToken = async () => {
+    const session = spotifySessionRef.current;
+    if (!session) throw new Error('Spotify is not connected');
+    if (session.expiresAt > Date.now() + 60000) return session.accessToken;
+    try {
+      const refreshed = await refreshSpotifySession(session);
+      spotifySessionRef.current = refreshed;
+      saveSpotifySession(refreshed);
+      return refreshed.accessToken;
+    } catch (error) {
+      spotifySessionRef.current = null;
+      saveSpotifySession(null);
+      throw error;
+    }
+  };
+
+  const pauseSpotify = async () => {
+    const player = spotifyPlayerRef.current;
+    if (!player) return;
+    try {
+      await player.pause();
+      setSpotifyIsPlaying(false);
+      setSpotifyStatus('ready');
+    } catch {
+      setSpotifyMessage('Spotify could not pause; local focus music remains available.');
+    }
+  };
+
+  const activateSpotify = async () => {
+    const player = spotifyPlayerRef.current;
+    const deviceId = spotifyDeviceIdRef.current;
+    if (!player || !deviceId) {
+      setSpotifyMessage('Spotify is still connecting.');
+      return;
+    }
+    const wasLocalPlaying = Boolean(audioRef.current);
+    try {
+      const token = await getSpotifyAccessToken();
+      const playerState = await player.getCurrentState();
+      if (playerState) {
+        if (playerState.paused) await player.togglePlay();
+      } else {
+        const current = await spotifyRequest('/me/player', token) as { item?: unknown } | null;
+        if (!current?.item) {
+          setSpotifyStatus('ready');
+          setSpotifyMessage('Start a track in Spotify, then choose Spotify here.');
+          return;
+        }
+        await spotifyRequest('/me/player', token, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ device_ids: [deviceId], play: true }),
+        });
+      }
+      if (wasLocalPlaying) stopAudio();
+      setAudioSource('spotify');
+      setSpotifyIsPlaying(true);
+      setSpotifyStatus('playing');
+      setSpotifyMessage('');
+    } catch {
+      setSpotifyStatus('error');
+      setSpotifyMessage('Spotify playback is unavailable; local focus music remains available.');
+      setAudioSource('local');
+    }
+  };
+
+  const connectSpotifyPlayer = async () => {
+    if (!spotifyClientId || disposedRef.current || spotifyPlayerRef.current) return;
+    setSpotifyStatus('connecting');
+    setSpotifyMessage('');
+    try {
+      const sdk = await loadSpotifySdk();
+      if (disposedRef.current) return;
+      const player = new sdk.Player({
+        name: 'Focus Galaxy',
+        getOAuthToken: (callback) => {
+          void getSpotifyAccessToken().then(callback).catch(() => callback(''));
+        },
+        volume: 0.5,
+      });
+      player.addListener('ready', (data) => {
+        const deviceId = data?.device_id as string | undefined;
+        if (!deviceId) return;
+        spotifyDeviceIdRef.current = deviceId;
+        setSpotifyStatus('ready');
+        void activateSpotify();
+      });
+      player.addListener('not_ready', () => {
+        setSpotifyStatus('ready');
+        setSpotifyMessage('Spotify browser playback went offline.');
+      });
+      player.addListener('player_state_changed', (data) => {
+        if (typeof data?.paused !== 'boolean') return;
+        setSpotifyIsPlaying(!data.paused);
+        setSpotifyStatus(data.paused ? 'ready' : 'playing');
+      });
+      player.addListener('initialization_error', () => {
+        setSpotifyStatus('error');
+        setSpotifyMessage('Spotify playback is not supported in this browser.');
+      });
+      player.addListener('authentication_error', () => {
+        setSpotifyStatus('error');
+        setSpotifyMessage('Spotify connection expired. Connect again to continue.');
+      });
+      player.addListener('account_error', () => {
+        setSpotifyStatus('error');
+        setSpotifyMessage('Spotify browser playback requires a Premium account.');
+        setAudioSource('local');
+      });
+      spotifyPlayerRef.current = player;
+      if (!await player.connect()) throw new Error('Spotify player failed to connect');
+    } catch {
+      spotifyPlayerRef.current?.disconnect();
+      spotifyPlayerRef.current = null;
+      setSpotifyStatus('error');
+      setSpotifyMessage('Spotify is unavailable; local focus music remains available.');
+    }
+  };
+
+  const handleSpotifyClick = () => {
+    if (!spotifyClientId || spotifyStatus === 'connecting') return;
+    if (spotifyPlayerRef.current) {
+      if (audioSource === 'spotify') {
+        setAudioSource('local');
+        void pauseSpotify();
+      } else {
+        void activateSpotify();
+      }
+      return;
+    }
+    spotifySessionRef.current = null;
+    saveSpotifySession(null);
+    void startSpotifyAuthorization().catch(() => {
+      setSpotifyStatus('error');
+      setSpotifyMessage('Spotify authorization could not start.');
+    });
+  };
+
+  useEffect(() => {
+    if (!spotifyClientId) return;
+    const params = new URLSearchParams(window.location.search);
+    const cleanupCallbackUrl = () => window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.hash}`);
+    const callbackError = params.get('error');
+    if (callbackError) {
+      cleanupCallbackUrl();
+      setSpotifyStatus('error');
+      setSpotifyMessage('Spotify authorization was cancelled.');
+      return;
+    }
+    const code = params.get('code');
+    if (code) {
+      const verifier = window.sessionStorage.getItem(SPOTIFY_VERIFIER_KEY);
+      const expectedState = window.sessionStorage.getItem(SPOTIFY_STATE_KEY);
+      const returnedState = params.get('state');
+      window.sessionStorage.removeItem(SPOTIFY_VERIFIER_KEY);
+      window.sessionStorage.removeItem(SPOTIFY_STATE_KEY);
+      cleanupCallbackUrl();
+      if (!verifier || !expectedState || returnedState !== expectedState) {
+        setSpotifyStatus('error');
+        setSpotifyMessage('Spotify authorization could not be verified.');
+        return;
+      }
+      setSpotifyStatus('connecting');
+      void exchangeSpotifyCode(code, verifier).then((session) => {
+        spotifySessionRef.current = session;
+        saveSpotifySession(session);
+        return connectSpotifyPlayer();
+      }).catch(() => {
+        setSpotifyStatus('error');
+        setSpotifyMessage('Spotify authorization failed; local focus music remains available.');
+      });
+      return;
+    }
+    if (spotifySessionRef.current) void connectSpotifyPlayer();
+  }, []);
+
   useEffect(() => () => {
+    disposedRef.current = true;
     const audio = audioRef.current;
     if (audio) {
       window.clearInterval(audio.timer);
       void audio.context.close();
     }
+    spotifyPlayerRef.current?.disconnect();
   }, []);
+
+  const spotifyConnected = spotifyStatus === 'ready' || spotifyStatus === 'playing';
+  const isSourcePlaying = audioSource === 'spotify' ? spotifyIsPlaying : isPlaying;
+  const spotifyLabel = !spotifyClientId
+    ? 'Spotify unavailable'
+    : spotifyConnected
+      ? audioSource === 'spotify' ? 'Use local focus music' : 'Use Spotify focus music'
+      : 'Connect Spotify';
 
   return (
     <div className="flex items-center rounded-full border border-white/10 bg-white/5 backdrop-blur-md overflow-hidden">
       <button
         type="button"
-        onClick={isPlaying ? stopAudio : startAudio}
+        onClick={() => {
+          if (audioSource === 'spotify') {
+            if (spotifyIsPlaying) void pauseSpotify();
+            else void activateSpotify();
+          } else if (isPlaying) stopAudio();
+          else startAudio();
+        }}
         className="flex items-center gap-2 px-3 py-2 text-white/70 hover:bg-white/10 hover:text-white transition-all text-xs font-semibold"
-        aria-label={isPlaying ? 'Pause classical focus music' : 'Play classical focus music'}
-        title={isPlaying ? 'Pause classical focus music' : 'Play classical focus music'}
+        aria-label={isSourcePlaying ? 'Pause focus music' : 'Play focus music'}
+        title={isSourcePlaying ? 'Pause focus music' : 'Play focus music'}
       >
-        {isPlaying ? <Volume2 size={15} /> : <VolumeX size={15} />}
+        {isSourcePlaying ? <Volume2 size={15} /> : <VolumeX size={15} />}
       </button>
       <select
         value={style}
         aria-label="Choose focus music"
         onChange={(event) => {
-          if (isPlaying) stopAudio();
+          if (audioSource === 'local' && isPlaying) stopAudio();
           setStyle(event.target.value as 'classical' | 'baroque' | 'nocturne');
         }}
         className="hidden sm:block max-w-[126px] border-0 border-l border-white/10 bg-transparent py-2 pl-2 pr-7 text-[11px] font-semibold text-white/75 outline-none cursor-pointer"
@@ -225,6 +601,19 @@ function FocusAudio() {
         <option value="baroque" className="bg-[#100d18]">Baroque Focus</option>
         <option value="nocturne" className="bg-[#100d18]">Quiet Nocturne</option>
       </select>
+      <button
+        type="button"
+        data-testid="spotify-connect"
+        onClick={handleSpotifyClick}
+        disabled={!spotifyClientId || spotifyStatus === 'connecting'}
+        aria-label={spotifyLabel}
+        title={spotifyMessage || spotifyLabel}
+        className={`flex items-center gap-1.5 border-l border-white/10 px-3 py-2 text-[11px] font-semibold transition-colors ${spotifyConnected && audioSource === 'spotify' ? 'text-[#1ed760]' : 'text-white/60 hover:bg-white/10 hover:text-white'} disabled:cursor-not-allowed disabled:opacity-45`}
+      >
+        <Music2 size={14} />
+        <span className="hidden sm:inline">Spotify</span>
+      </button>
+      <span className="sr-only" role="status" aria-live="polite">{spotifyMessage}</span>
     </div>
   );
 }
