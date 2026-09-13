@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, memo, type CSSProperties, type FormEvent } from 'react';
-import { Plus, RotateCcw, X, Target, Activity, Orbit, Trash2, ListChecks, Volume2, VolumeX, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, RotateCcw, X, Target, Orbit, Trash2, ListChecks, Volume2, VolumeX, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -242,7 +242,7 @@ function RangeControl({
            transition={{ type: 'spring', damping: 20, stiffness: 200 }}
         />
         <input 
-          type="range" min="1" max="10" step="1" value={value} 
+          type="range" min="1" max="10" step="1" value={value} aria-label={label}
           onChange={(e) => onChange(Number(e.target.value))}
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
         />
@@ -319,6 +319,14 @@ function ManageTasksDialog({
   onSelect: (id: string) => void;
   onRename: (id: string, name: string) => void;
 }) {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
     <motion.div
       className="fixed inset-0 z-50 grid place-items-center p-4 bg-background/60 backdrop-blur-sm"
@@ -343,7 +351,7 @@ function ManageTasksDialog({
             <h2 id="manage-tasks-title" className="font-display text-xl font-semibold text-white tracking-wide">Manage priorities</h2>
             <p className="text-muted-foreground text-xs mt-1.5">Rename any pre-listed or added planet.</p>
           </div>
-          <button type="button" onClick={onClose} className="w-7 h-7 rounded-full bg-white/5 border border-white/10 text-muted-foreground flex items-center justify-center hover:text-white">
+          <button type="button" onClick={onClose} aria-label="Close dialog" className="w-7 h-7 rounded-full bg-white/5 border border-white/10 text-muted-foreground flex items-center justify-center hover:text-white">
             <X size={14} />
           </button>
         </div>
@@ -403,11 +411,6 @@ function InsightPanel({ insight, priority }: { insight: string, priority?: Prior
         {insight}
       </p>
       
-      {priority && (
-        <button className="mt-6 flex items-center gap-2 px-5 py-2 rounded-full border border-white/10 bg-white/5 text-[11px] font-medium hover:bg-white/10 text-white transition-colors z-10 tracking-wider uppercase">
-          <Activity size={14} /> Explore Scenarios
-        </button>
-      )}
     </div>
   );
 }
@@ -418,12 +421,14 @@ function SelectedPanel({
   onRename,
   onComplete,
   onRemove,
+  onClose,
 }: {
   priority?: Priority;
   onUpdate: (metric: MetricKey, val: number) => void;
   onRename: (name: string) => void;
   onComplete: () => void;
   onRemove: () => void;
+  onClose: () => void;
 }) {
   const [name, setName] = useState(priority?.name ?? '');
 
@@ -472,7 +477,7 @@ function SelectedPanel({
             </span>
           </div>
         </div>
-        <button onClick={() => onRemove()} className="text-muted-foreground hover:text-white transition-colors" aria-label="Close panel">
+        <button type="button" onClick={onClose} className="text-muted-foreground hover:text-white transition-colors" aria-label="Close panel">
            <X size={16} />
         </button>
       </div>
@@ -484,7 +489,7 @@ function SelectedPanel({
       </div>
       
       <div className="flex items-center gap-3 mt-6">
-        <button onClick={() => { if(window.confirm('Remove this priority?')) onRemove() }} className="w-10 h-10 rounded-xl border border-white/10 text-muted-foreground flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 transition-colors">
+        <button type="button" onClick={() => { if(window.confirm('Remove this priority?')) onRemove() }} aria-label="Delete priority" className="w-10 h-10 rounded-xl border border-white/10 text-muted-foreground flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 transition-colors">
           <Trash2 size={16} />
         </button>
          <button type="submit" className="flex-1 h-10 rounded-xl border border-white/10 bg-white/5 text-[12px] font-medium text-white hover:bg-white/10 transition-colors">
@@ -542,6 +547,7 @@ function AddPriorityDialog({
         onSubmit={submit} 
         role="dialog" 
         aria-modal="true"
+        aria-labelledby="add-priority-title"
         initial={{ scale: 0.95, y: 15, opacity: 0 }}
         animate={{ scale: 1, y: 0, opacity: 1 }}
         exit={{ scale: 0.95, y: 10, opacity: 0 }}
@@ -549,11 +555,12 @@ function AddPriorityDialog({
       >
         <div className="flex justify-between gap-5 mb-6">
           <div>
-            <h2 className="font-display text-xl font-semibold m-0 text-white tracking-wide">New body</h2>
+            <h2 id="add-priority-title" className="font-display text-xl font-semibold m-0 text-white tracking-wide">New body</h2>
             <p className="text-muted-foreground text-xs mt-1.5">Give the next thing a place in your sky.</p>
           </div>
           <motion.button 
             type="button" 
+            aria-label="Close dialog"
             className="w-7 h-7 rounded-full bg-white/5 border border-white/10 text-muted-foreground flex items-center justify-center hover:text-white transition-colors self-start" 
             onClick={onClose} 
             whileHover={{ scale: 1.1 }}
@@ -1047,13 +1054,13 @@ function Home() {
                <span className="px-4 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-semibold text-white/40 cursor-default hover:text-white/70 transition-colors">This Month</span>
             </div>
             
-            <button onClick={() => setIsAddOpen(true)} className="flex items-center gap-2 px-4 py-2 rounded-full border border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 hover:border-primary transition-all text-xs lg:text-sm font-semibold backdrop-blur-md shadow-[0_0_20px_rgba(155,91,228,0.15)]">
+            <button onClick={() => setIsAddOpen(true)} aria-label="Add priority" className="flex items-center gap-2 px-4 py-2 rounded-full border border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 hover:border-primary transition-all text-xs lg:text-sm font-semibold backdrop-blur-md shadow-[0_0_20px_rgba(155,91,228,0.15)]">
                <Plus size={16} strokeWidth={2.5} /> <span className="hidden sm:inline">Add Priority</span>
             </button>
 
              <FocusAudio />
 
-             <button onClick={() => setIsManageOpen(true)} className="flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-all text-xs font-semibold backdrop-blur-md">
+             <button onClick={() => setIsManageOpen(true)} aria-label="Manage priorities" className="flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-all text-xs font-semibold backdrop-blur-md">
                 <ListChecks size={16} /> <span className="hidden md:inline">Manage</span>
              </button>
             
@@ -1108,7 +1115,7 @@ function Home() {
         >
            {priorities.length > 0 && <FocusSignalPanel topPriorities={topPriorities} onSelect={selectPriority} onRename={renamePriority} />}
            {priorities.length > 0 && <InsightPanel insight={insight} priority={selectedPriority} />}
-           {priorities.length > 0 && <SelectedPanel priority={selectedPriority} onUpdate={updateSelected} onRename={renameSelected} onComplete={completeSelected} onRemove={removeSelected} />}
+           {priorities.length > 0 && <SelectedPanel priority={selectedPriority} onUpdate={updateSelected} onRename={renameSelected} onComplete={completeSelected} onRemove={removeSelected} onClose={() => setSelectedId(null)} />}
         </motion.div>
       </motion.div>
       
