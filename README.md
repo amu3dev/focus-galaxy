@@ -1,6 +1,10 @@
 # Focus Galaxy
 
-Focus Galaxy is a local-first focus and priority map that turns tasks into an interactive galaxy and shows what deserves attention now.
+> **Experimental MVP:** a local-first focus and priority map that turns tasks into an interactive galaxy and shows what deserves attention now.
+
+![Synthetic Focus Galaxy interaction — no real task data](docs/assets/focus-galaxy-synthetic.svg)
+
+> **Synthetic UI proof:** generated tasks and scores; no real user data. The public repository has no hosted demo or release yet.
 
 ## What it does
 
