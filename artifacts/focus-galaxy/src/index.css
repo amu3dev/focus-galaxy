@@ -53,12 +53,8 @@ body {
   justify-content: flex-end;
 }
 .focus-audio,
-.today-context,
 .header-reset {
   flex-shrink: 0;
-}
-.today-context {
-  white-space: nowrap;
 }
 
 /* Background layers */
@@ -185,8 +181,7 @@ body {
 .galaxy-layer,
 .orbital-plane,
 .insight-dock,
-.panel-slot,
-.orbit-depth {
+.panel-slot {
   transform-style: preserve-3d;
 }
 .galaxy-viewport,
@@ -219,6 +214,31 @@ body {
 .orb-hit-container {
   pointer-events: none;
   transform-style: preserve-3d;
+}
+.orb-hit-layer {
+  pointer-events: none;
+  z-index: 12;
+}
+.orb-screen-hit {
+  position: absolute;
+  width: 64px;
+  height: 64px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  pointer-events: auto;
+  touch-action: manipulation;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+}
+.orb-screen-hit:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.95);
+  outline-offset: 7px;
+}
+.orb-screen-hit:active {
+  transform: translate(-50%, -50%) scale(0.96);
 }
 .cosmos-dim-layer,
 .cosmos-lift-layer {
@@ -382,19 +402,6 @@ body {
   transition: all 0.25s ease;
 }
 
-/* Gravitational Tether */
-.grav-tether-line {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform-origin: 0 0;
-  pointer-events: none;
-  height: 2px;
-  background: linear-gradient(90deg, rgba(255, 190, 60, 0.8), var(--tether-color, #9b5be4) 70%, transparent 100%);
-  box-shadow: 0 0 12px var(--tether-color, #9b5be4);
-  z-index: 1;
-}
-
 /* Orbit Tracks */
 .orbit-track {
   border-radius: 50%;
@@ -427,16 +434,8 @@ body {
   color: inherit;
   font: inherit;
   touch-action: manipulation;
-  pointer-events: auto;
+  pointer-events: none;
   transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-.orb-wrapper:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.9);
-  outline-offset: 6px;
-  border-radius: 20px;
-}
-.orb-wrapper:focus:not(:focus-visible) {
-  outline: none;
 }
 
 .orb-planet {
@@ -574,14 +573,10 @@ body {
   filter: brightness(0.65) saturate(60%) !important;
   transition: opacity 0.4s ease, filter 0.4s ease;
 }
-.horizon-focused {
-  filter: brightness(1.2) drop-shadow(0 0 15px var(--orb-color, #9b5be4)) !important;
-  transition: filter 0.4s ease;
-}
-
 .orb-label {
   text-align: center;
   margin-top: 4px;
+  transition: opacity 180ms ease, transform 180ms ease;
 }
 .orb-name {
   font-family: var(--font-sans);
@@ -708,6 +703,29 @@ input[type=range]::-moz-range-thumb {
   background: transparent;
 }
 
+@media (min-width: 768px) and (max-width: 1279px) {
+  .insight-dock {
+    bottom: 24px;
+    left: 24px;
+    right: 24px;
+    flex-direction: row;
+    gap: 16px;
+  }
+  .insight-dock .panel-slot {
+    flex: 1 1 0;
+    width: 0;
+    min-width: 0;
+    height: 240px;
+  }
+  .insight-dock .panel-slot-insight > .panel-card {
+    height: 100%;
+    min-height: 0;
+  }
+  .insight-dock .selected-panel-card {
+    overflow-y: auto;
+  }
+}
+
 @media (max-width: 640px) {
   .app-header { padding: 14px 12px; }
   .header-inner { gap: 12px; }
@@ -726,19 +744,20 @@ input[type=range]::-moz-range-thumb {
     max-width: 64px;
     max-height: 64px;
   }
+  .orb-wrapper:not(.selected) .orb-label { opacity: 0; }
+  .orb-wrapper.selected .orb-label { opacity: 1; }
   .core-title { font-size: 14px; }
   .core-subtitle { font-size: 9px; }
   .cosmos-brightness-control { min-height: 34px; padding-inline: 8px; gap: 6px; }
   .cosmos-brightness-range { width: 72px; }
 }
 
-@media (max-width: 767px) {
-  .mobile-manage.panel-open {
-    bottom: calc(min(54dvh, 390px) + 24px);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .core-body,
-  .core-body::after { animation: none; }
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
 }

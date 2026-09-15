@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useRef, useState, memo, type CSSProperties, type FormEvent } from 'react';
-import { Plus, RotateCcw, X, Target, Activity, Orbit, Trash2, ListChecks, Volume2, VolumeX, Music2, CheckCircle2, ChevronDown, ChevronUp, SunMedium, Sparkles, Zap, Compass, HelpCircle } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, memo, type CSSProperties, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import { createPortal } from 'react-dom';
+import { Plus, RotateCcw, X, Target, Activity, Orbit, Trash2, ListChecks, Volume2, VolumeX, Music2, CheckCircle2, ChevronDown, ChevronUp, SunMedium } from 'lucide-react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import NotFound from '@/pages/not-found';
-import { Route, Switch, Router as WouterRouter } from 'wouter';
-import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, animate } from 'framer-motion';
+import { Route, Switch } from 'wouter';
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
 
 type Priority = {
   id: string;
@@ -794,6 +795,76 @@ function FocusSignalPanel({
   );
 }
 
+function useDialogFocus<T extends HTMLElement>(onClose: () => void) {
+  const dialogRef = useRef<T>(null);
+  const openerRef = useRef<HTMLElement | null>(
+    typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+  );
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    const opener = openerRef.current;
+    if (!dialog) return;
+
+    const getFocusable = () => Array.from(dialog.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"]):not([disabled])'
+    ));
+
+    if (!dialog.contains(document.activeElement)) {
+      (getFocusable()[0] || dialog).focus();
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const activeDialog = document.activeElement instanceof HTMLElement
+        ? document.activeElement.closest('[role="dialog"]')
+        : null;
+      if (activeDialog && activeDialog !== dialog) return;
+      if (!dialog.contains(document.activeElement)) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+
+      const focusable = getFocusable();
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+
+      const current = document.activeElement;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!dialog.contains(current)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && current === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && current === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      requestAnimationFrame(() => {
+        if (opener?.isConnected && !document.querySelector('[role="dialog"]')) opener.focus();
+      });
+    };
+  }, []);
+
+  return dialogRef;
+}
+
 function ManageTasksDialog({
   priorities,
   onClose,
@@ -805,13 +876,7 @@ function ManageTasksDialog({
   onSelect: (id: string) => void;
   onRename: (id: string, name: string) => void;
 }) {
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  const dialogRef = useDialogFocus<HTMLDivElement>(onClose);
 
   return (
     <motion.div
@@ -825,7 +890,9 @@ function ManageTasksDialog({
     >
       <motion.div
         className="add-dialog w-full max-w-md"
+        ref={dialogRef}
         role="dialog"
+        tabIndex={-1}
         aria-modal="true"
         aria-labelledby="manage-tasks-title"
         initial={{ scale: 0.96, y: 12, opacity: 0 }}
@@ -878,7 +945,7 @@ function ManageTasksDialog({
   );
 }
 
-function InsightPanel({ insight, priority }: { insight: string, priority?: Priority }) {
+function InsightPanel({ insight, title, priority }: { insight: string, title: string, priority?: Priority }) {
   const color = priority?.hue || '#9b5be4';
   
   return (
@@ -899,7 +966,7 @@ function InsightPanel({ insight, priority }: { insight: string, priority?: Prior
       </div>
       
       <h3 className="font-sans font-bold text-[16px] mb-2 text-white z-10 tracking-wide">
-        {priority ? "You're pulled toward action." : "Field is open."}
+        {title}
       </h3>
       
       <p className="text-[13px] text-white/60 leading-relaxed max-w-[280px] z-10 font-medium">
@@ -1055,14 +1122,7 @@ function AddPriorityDialog({
   onCreate: (name: string) => void;
 }) {
   const [name, setName] = useState('');
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  const dialogRef = useDialogFocus<HTMLFormElement>(onClose);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1085,7 +1145,9 @@ function AddPriorityDialog({
       <motion.form 
         className="add-dialog" 
         onSubmit={submit} 
+        ref={dialogRef}
         role="dialog" 
+        tabIndex={-1}
         aria-modal="true"
         aria-labelledby="add-priority-title"
         initial={{ scale: 0.95, y: 15, opacity: 0 }}
@@ -1267,9 +1329,17 @@ function OrbComponent({
   const isUnrelated = selectedId !== null && !isSelected;
   const score = getFocusScore(priority);
   const [isHovered, setIsHovered] = useState(false);
+  const [hitLayer, setHitLayer] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    setHitLayer(document.getElementById('orb-hit-layer'));
+  }, []);
   
   const baseAngle = useMemo(() => getPlanetBaseAngle(priority.id), [priority.id]);
   const drift = useMotionValue(0);
+  const planetRef = useRef<HTMLDivElement>(null);
+  const hitX = useMotionValue(0);
+  const hitY = useMotionValue(0);
   
   const urgencySpring = useSpring(priority.urgency, { stiffness: 50, damping: 15 });
   const importanceSpring = useSpring(priority.importance, { stiffness: 50, damping: 15 });
@@ -1298,6 +1368,20 @@ function OrbComponent({
     animId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(animId);
   }, [prefersReducedMotion, isHovered, isSelected, urgencySpring, drift]);
+
+  useEffect(() => {
+    let frame = 0;
+    const syncHitArea = () => {
+      const rect = planetRef.current?.getBoundingClientRect();
+      if (rect) {
+        hitX.set(rect.left + rect.width / 2);
+        hitY.set(rect.top + rect.height / 2);
+      }
+      frame = requestAnimationFrame(syncHitArea);
+    };
+    frame = requestAnimationFrame(syncHitArea);
+    return () => cancelAnimationFrame(frame);
+  }, [hitX, hitY]);
 
   // True 3D coordinate inside the tilted orbital plane:
   // Since the plane itself is tilted (rotateX 56deg, rotateZ -10deg),
@@ -1346,6 +1430,39 @@ function OrbComponent({
   // Gas giant planetary ring for high-energy or specific flagship priorities
   const hasPlanetaryRing = priority.energy >= 7 || priority.id === 'signalboard' || priority.id === 'job-search';
 
+  const handleScreenClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    if (event.detail > 0) {
+      let nearest: HTMLButtonElement | null = null;
+      let nearestDistance = Infinity;
+      for (const button of document.querySelectorAll<HTMLButtonElement>('.orb-screen-hit')) {
+        const rect = button.getBoundingClientRect();
+        const distance = Math.hypot(
+          event.clientX - (rect.left + rect.width / 2),
+          event.clientY - (rect.top + rect.height / 2),
+        );
+        if (distance < nearestDistance) {
+          nearest = button;
+          nearestDistance = distance;
+        }
+      }
+      if (nearest && nearest !== event.currentTarget) {
+        event.preventDefault();
+        event.stopPropagation();
+        nearest.focus({ preventScroll: true });
+        nearest.dispatchEvent(new window.MouseEvent('click', {
+          bubbles: true,
+          cancelable: true,
+          clientX: event.clientX,
+          clientY: event.clientY,
+          detail: event.detail,
+          view: window,
+        }));
+        return;
+      }
+    }
+    onSelect(priority.id);
+  };
+
   return (
     <motion.div
       className={`orb-hit-container ${!isHorizonFocused ? 'horizon-dimmed' : ''}`}
@@ -1376,18 +1493,12 @@ function OrbComponent({
 
       {/* Billboard wrapper counter-rotates the plane's tilt so planet & labels face camera directly */}
       <div className="orb-billboard">
-        <motion.button
-          type="button"
+        <motion.div
           className={`orb-wrapper ${isSelected ? 'selected' : ''}`}
-          aria-label={`Select ${priority.name}`}
-          aria-pressed={isSelected}
-          data-testid={`orb-${priority.id}`}
-          onFocus={() => onSelect(priority.id)}
-          onClick={() => onSelect(priority.id)}
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-          whileHover={!isCompleting ? { scale: 1.08 } : {}}
-          whileTap={!isCompleting ? { scale: 0.96 } : {}}
+          aria-hidden="true"
+          style={{ '--orb-color': priority.hue } as CSSProperties}
+          animate={{ scale: isHovered && !isCompleting ? 1.08 : 1 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 20 }}
         >
           <div className="relative">
             <div className="absolute -top-3 -right-3 px-2 py-0.5 rounded-full text-[10px] font-bold font-display z-20 text-white backdrop-blur-md" style={{
@@ -1399,13 +1510,13 @@ function OrbComponent({
             </div>
 
             {hasPlanetaryRing && <div className="orb-planet-ring" />}
-            
+
             <motion.div
+              ref={planetRef}
               className="orb-planet"
               style={{
                 width: size,
                 height: size,
-                '--orb-color': priority.hue,
               } as any}
             />
           </div>
@@ -1415,8 +1526,30 @@ function OrbComponent({
               {getSubLabel(priority.name)}
             </span>
           </div>
-        </motion.button>
+        </motion.div>
       </div>
+      {hitLayer && createPortal(
+        <motion.button
+          type="button"
+          className="orb-screen-hit"
+          aria-label={`Select ${priority.name}`}
+          aria-pressed={isSelected}
+          data-testid={`orb-${priority.id}`}
+          style={{ left: hitX, top: hitY, zIndex: depthZIndex }}
+          onClick={handleScreenClick}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              onSelect(priority.id);
+            }
+          }}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+          onFocus={() => setIsHovered(true)}
+          onBlur={() => setIsHovered(false)}
+        />,
+        hitLayer,
+      )}
     </motion.div>
   );
 }
@@ -1611,7 +1744,10 @@ function FocusGalaxyContainer() {
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) return;
+      const target = e.target instanceof HTMLElement ? e.target : null;
+      if (isAddOpen || isManageOpen) return;
+      if (target?.closest('[role="tablist"], [role="dialog"]')) return;
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName ?? '')) return;
       if (e.key === 'Escape') {
         setSelectedId(null);
         setIsZenMode(false);
@@ -1643,7 +1779,7 @@ function FocusGalaxyContainer() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [priorities, selectedId]);
+  }, [priorities, selectedId, isAddOpen, isManageOpen]);
 
   const topPriorities = [...priorities].sort((a, b) => getFocusScore(b) - getFocusScore(a)).slice(0, 3);
   const selectedPriority = priorities.find(p => p.id === selectedId);
@@ -1663,6 +1799,16 @@ function FocusGalaxyContainer() {
     return `${selectedPriority.name} is steadily in orbit. Tune its metrics if the situation shifts.`;
   }, [selectedPriority, topPriorities, priorities.length]);
 
+  const insightTitle = useMemo(() => {
+    if (!priorities.length) return "Field is open.";
+    if (!selectedPriority) {
+      return topPriorities[0] && getFocusScore(topPriorities[0]) > 80
+        ? "Attention is concentrating."
+        : "Field is balanced.";
+    }
+    return "You're pulled toward action.";
+  }, [selectedPriority, topPriorities, priorities.length]);
+
   const { mouseX, mouseY, handleMouseMove, handleMouseLeave } = useParallax();
   const panX = useTransform(mouseX, [-0.5, 0.5], [12, -12]);
   const panY = useTransform(mouseY, [-0.5, 0.5], [12, -12]);
@@ -1676,6 +1822,7 @@ function FocusGalaxyContainer() {
     '--cosmos-dim-opacity': String(Math.max(0, (100 - cosmosBrightness) / 100 * 0.55)),
     '--cosmos-lift-opacity': String(Math.max(0, (cosmosBrightness - 100) / 30 * 0.32)),
   } as CSSProperties;
+  const horizonOptions = ['today', 'week', 'month'] as const;
 
   return (
     <div 
@@ -1719,13 +1866,30 @@ function FocusGalaxyContainer() {
           <div className="header-actions flex flex-col md:flex-row items-center gap-3 pointer-events-auto">
             {/* Functional Time Horizon Selector */}
             <div className="hidden md:flex items-center rounded-full bg-white/5 border border-white/10 p-1 backdrop-blur-md" role="tablist" aria-label="Time Horizon filter">
-              {(['today', 'week', 'month'] as const).map((horizon) => (
+              {horizonOptions.map((horizon) => (
                 <button
                   key={horizon}
+                  id={`horizon-${horizon}`}
                   type="button"
                   role="tab"
                   aria-selected={timeHorizon === horizon}
+                  aria-controls="cosmos-horizon-panel"
+                  tabIndex={timeHorizon === horizon ? 0 : -1}
                   onClick={() => setTimeHorizon(horizon)}
+                  onKeyDown={(event) => {
+                    const currentIndex = horizonOptions.indexOf(horizon);
+                    let nextIndex = currentIndex;
+                    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % horizonOptions.length;
+                    else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + horizonOptions.length) % horizonOptions.length;
+                    else if (event.key === 'Home') nextIndex = 0;
+                    else if (event.key === 'End') nextIndex = horizonOptions.length - 1;
+                    else return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const nextHorizon = horizonOptions[nextIndex];
+                    setTimeHorizon(nextHorizon);
+                    requestAnimationFrame(() => document.getElementById(`horizon-${nextHorizon}`)?.focus());
+                  }}
                   className={`px-3.5 py-1.5 rounded-full text-[11px] font-bold transition-all ${
                     timeHorizon === horizon
                       ? 'bg-primary/30 text-white shadow-[0_0_12px_rgba(155,91,228,0.4)] border border-primary/40'
@@ -1750,7 +1914,7 @@ function FocusGalaxyContainer() {
                 <ListChecks size={15} />
                 <span className="header-manage-label">Manage</span>
               </button>
-              
+
               <button onClick={resetPriorities} className="header-reset w-10 h-10 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors shadow-[0_4px_10px_rgba(0,0,0,0.5)]" aria-label="Reset priorities">
                 <RotateCcw size={15} />
               </button>
@@ -1758,9 +1922,14 @@ function FocusGalaxyContainer() {
           </div>
         </div>
       </header>
-      
-      <motion.div 
+
+      <div id="orb-hit-layer" className="orb-hit-layer absolute inset-0 pointer-events-none" />
+
+      <motion.div
         className="galaxy-viewport absolute inset-0 z-10 pointer-events-none"
+        id="cosmos-horizon-panel"
+        role="tabpanel"
+        aria-labelledby={`horizon-${timeHorizon}`}
         style={{ x: panX, y: panY, rotateX: tiltX, rotateY: tiltY, transformPerspective: 1400, transformStyle: 'preserve-3d' }}
       >
         <div className="galaxy-layer absolute inset-0 transform-gpu origin-center pointer-events-none">
@@ -1777,11 +1946,11 @@ function FocusGalaxyContainer() {
 
             <AnimatePresence>
               {priorities.map((p, i) => (
-                <OrbComponent 
-                  key={p.id} 
-                  priority={p} 
-                  index={i} 
-                  selectedId={selectedId} 
+                <OrbComponent
+                  key={p.id}
+                  priority={p}
+                  index={i}
+                  selectedId={selectedId}
                   timeHorizon={timeHorizon}
                   onSelect={selectPriority}
                   isCompleting={p.id === completingId}
@@ -1792,7 +1961,7 @@ function FocusGalaxyContainer() {
           </div>
 
           {/* Living Center of Gravity (YOU / NOW) */}
-          <LivingCore 
+          <LivingCore
             topPriorities={topPriorities}
             totalPriorities={priorities.length}
             onSelectTop={() => {
@@ -1816,7 +1985,7 @@ function FocusGalaxyContainer() {
         <button
           type="button"
           onClick={() => setPanelsOpen((open) => !open)}
-          className="hidden xl:flex absolute left-1/2 -top-10 -translate-x-1/2 z-30 h-8 items-center gap-2 rounded-full border border-white/15 bg-[#110d19]/90 px-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/65 backdrop-blur-xl hover:border-primary/40 hover:text-white pointer-events-auto"
+          className="hidden xl:flex absolute right-0 -top-10 z-30 h-8 items-center gap-2 rounded-full border border-white/15 bg-[#110d19]/90 px-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/65 backdrop-blur-xl hover:border-primary/40 hover:text-white pointer-events-auto"
           aria-expanded={panelsOpen}
         >
           {panelsOpen ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
@@ -1836,6 +2005,7 @@ function FocusGalaxyContainer() {
         <div className="panel-slot panel-slot-insight w-full xl:w-[min(30vw,400px)] shrink-0 transform-gpu transition-all duration-500 hidden md:block">
            <InsightPanel 
              insight={insight} 
+             title={insightTitle}
              priority={selectedPriority || topPriorities[0]} 
            />
         </div>
@@ -1850,7 +2020,7 @@ function FocusGalaxyContainer() {
                 exit={{ opacity: 0, y: 18, scale: 0.98 }}
                 transition={{ type: 'spring', stiffness: 220, damping: 24 }}
               >
-                <SelectedPanel 
+                <SelectedPanel
                   priority={selectedPriority}
                   onUpdate={(metric, val) => updatePriority(selectedPriority.id, metric, val)}
                   onRename={(name) => renamePriority(selectedPriority.id, name)}
