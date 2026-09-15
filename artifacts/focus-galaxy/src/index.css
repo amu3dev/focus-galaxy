@@ -33,6 +33,30 @@ body {
   overflow-x: hidden;
 }
 
+.app-header {
+  padding: 18px 24px;
+}
+.header-inner {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+.header-actions {
+  min-width: 0;
+}
+.header-utilities {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.focus-audio,
+.today-context,
+.header-reset {
+  flex-shrink: 0;
+}
+.today-context {
+  white-space: nowrap;
+}
+
 /* Background layers */
 .bg-stars {
   position: fixed;
@@ -155,13 +179,15 @@ body {
 }
 .galaxy-viewport,
 .galaxy-layer,
+.orbital-plane,
 .insight-dock,
 .panel-slot,
 .orbit-depth {
   transform-style: preserve-3d;
 }
 .galaxy-viewport,
-.galaxy-layer {
+.galaxy-layer,
+.orbital-plane {
   pointer-events: none;
 }
 .galaxy-viewport {
@@ -170,13 +196,25 @@ body {
   will-change: transform;
 }
 .galaxy-layer {
-  transform: translate3d(0, -12%, 0);
+  transform: translate3d(0, -6%, 0);
   opacity: var(--cosmos-scene-opacity, 1);
   transition: opacity 180ms ease;
   will-change: transform;
 }
+.orbital-plane {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+  transform: rotateX(56deg) rotateZ(-10deg);
+}
+.orb-billboard {
+  transform-style: preserve-3d;
+  transform: rotateZ(10deg) rotateX(-56deg);
+  pointer-events: auto;
+}
 .orb-hit-container {
   pointer-events: none;
+  transform-style: preserve-3d;
 }
 .cosmos-dim-layer,
 .cosmos-lift-layer {
@@ -218,12 +256,77 @@ body {
   .selected-panel-card .w-12.h-12 { width: 36px; height: 36px; }
 }
 
+/* Central Star: Living Solar Core */
+.core-container {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  transform-style: preserve-3d;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.core-corona {
+  position: absolute;
+  inset: -60%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 175, 55, 0.45) 0%, rgba(255, 120, 20, 0.22) 40%, rgba(155, 91, 228, 0.12) 65%, transparent 75%);
+  filter: blur(14px);
+  animation: corona-pulse 7s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+.core-grav-wave {
+  position: absolute;
+  inset: -150%;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 200, 100, 0.35);
+  box-shadow: 0 0 30px rgba(255, 180, 50, 0.2) inset, 0 0 20px rgba(255, 180, 50, 0.15);
+  animation: grav-ripple 6s cubic-bezier(0.1, 0.6, 0.3, 1) infinite;
+  pointer-events: none;
+}
+.core-grav-wave:nth-child(2) {
+  animation-delay: -3s;
+}
+@keyframes corona-pulse {
+  0% { transform: scale(0.92) rotate(0deg); opacity: 0.65; }
+  50% { transform: scale(1.08) rotate(180deg); opacity: 0.95; filter: blur(18px); }
+  100% { transform: scale(0.92) rotate(360deg); opacity: 0.65; }
+}
+@keyframes grav-ripple {
+  0% { transform: scale(0.3); opacity: 0.8; }
+  60% { opacity: 0.3; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
 .core-body {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #ffffff 0%, #ffdf80 20%, #f79622 65%, #c24d0d 95%);
+  background: radial-gradient(circle at 35% 35%, #ffffff 0%, #ffe999 18%, #f79622 55%, #c24d0d 88%, #5a1900 100%);
+  box-shadow:
+    0 0 35px rgba(255, 160, 40, 0.75),
+    0 0 70px rgba(255, 120, 20, 0.4),
+    inset -8px -8px 24px rgba(120, 30, 0, 0.8),
+    inset 6px 6px 18px rgba(255, 255, 255, 0.9);
   z-index: 1;
+  animation: core-breathe 8s ease-in-out infinite;
+}
+.core-body::after {
+  content: '';
+  position: absolute;
+  inset: -12%;
+  border: 1.5px solid rgba(255, 223, 128, 0.5);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: core-pulse 5s ease-out infinite;
+}
+@keyframes core-breathe {
+  0%, 100% { transform: scale(0.98); }
+  50% { transform: scale(1.03); }
+}
+@keyframes core-pulse {
+  0% { opacity: 0.6; transform: scale(0.85); }
+  70%, 100% { opacity: 0; transform: scale(1.22); }
 }
 .core-text {
   position: relative;
@@ -242,18 +345,67 @@ body {
   font-weight: 800;
   font-size: 18px;
   color: #fff;
-  text-shadow: 0 2px 10px rgba(0,0,0,0.5), 0 0 20px rgba(255,255,255,0.4);
+  text-shadow: 0 2px 10px rgba(0,0,0,0.6), 0 0 20px rgba(255,255,255,0.6);
   letter-spacing: 0.05em;
 }
 .core-subtitle {
   display: block;
   font-family: var(--font-display);
   font-size: 10px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
-  letter-spacing: 0.05em;
-  margin-top: 4px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+  letter-spacing: 0.08em;
+  margin-top: 3px;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
 }
+.core-status-badge {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(12, 10, 26, 0.85);
+  border: 1px solid rgba(255, 190, 80, 0.35);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), 0 0 12px rgba(255, 160, 40, 0.2);
+  border-radius: 9999px;
+  padding: 4px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255, 230, 180, 0.9);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  pointer-events: none;
+  backdrop-filter: blur(12px);
+  transition: all 0.25s ease;
+}
+
+/* Gravitational Tether */
+.grav-tether-line {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-origin: 0 0;
+  pointer-events: none;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(255, 190, 60, 0.8), var(--tether-color, #9b5be4) 70%, transparent 100%);
+  box-shadow: 0 0 12px var(--tether-color, #9b5be4);
+  z-index: 1;
+}
+
+/* Orbit Tracks */
+.orbit-track {
+  border-radius: 50%;
+  pointer-events: none;
+  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+}
+.orbit-track-selected {
+  animation: orbit-track-glow 3s ease-in-out infinite alternate;
+}
+@keyframes orbit-track-glow {
+  0% { opacity: 0.55; filter: drop-shadow(0 0 8px var(--borderColor)); }
+  100% { opacity: 0.95; filter: drop-shadow(0 0 22px var(--borderColor)); }
+}
+
+/* Orbiting Bodies */
 .orb-wrapper {
   display: flex;
   flex-direction: column;
@@ -272,10 +424,12 @@ body {
   font: inherit;
   touch-action: manipulation;
   pointer-events: auto;
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .orb-wrapper:focus-visible {
   outline: 2px solid rgba(255, 255, 255, 0.9);
-  outline-offset: 4px;
+  outline-offset: 6px;
+  border-radius: 20px;
 }
 .orb-wrapper:focus:not(:focus-visible) {
   outline: none;
@@ -286,52 +440,139 @@ body {
   background: radial-gradient(
     circle at 35% 35%, 
     #fff 0%, 
-    color-mix(in srgb, var(--orb-color), white 40%) 20%,
-    var(--orb-color) 50%,
-    color-mix(in srgb, var(--orb-color), black 60%) 85%,
-    #000 100%
+    color-mix(in srgb, var(--orb-color), white 45%) 18%,
+    var(--orb-color) 48%,
+    color-mix(in srgb, var(--orb-color), black 65%) 82%,
+    #020108 100%
   );
   box-shadow: 
-    inset -10px -10px 20px rgba(0,0,0,0.8),
-    inset 4px 4px 15px rgba(255,255,255,0.8),
-    0 0 30px 2px color-mix(in srgb, var(--orb-color), transparent 60%);
+    inset -8px -8px 20px rgba(0,0,0,0.85),
+    inset 5px 5px 15px rgba(255,255,255,0.8),
+    0 0 28px 2px color-mix(in srgb, var(--orb-color), transparent 50%);
   position: relative;
-  transition: all 0.3s ease;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
-.orb-planet::before {
-  content: '';
-  position: absolute;
-  inset: -16%;
-  border: 1px solid color-mix(in srgb, var(--orb-color), transparent 45%);
-  border-left-color: transparent;
-  border-right-color: color-mix(in srgb, var(--orb-color), white 20%);
-  border-radius: 50%;
-  transform: rotateX(66deg) rotateZ(-12deg) scaleX(1.35);
-  opacity: 0.58;
-  pointer-events: none;
-}
-
+/* Atmospheric rim */
 .orb-planet::after {
   content: '';
   position: absolute;
-  inset: -2px;
+  inset: -3px;
   border-radius: 50%;
-  box-shadow: 0 0 20px 2px var(--orb-color);
-  opacity: 0.6;
+  box-shadow: 0 0 22px 3px var(--orb-color);
+  opacity: 0.65;
   pointer-events: none;
+  transition: opacity 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Planetary Ring for Ringed Giants */
+.orb-planet-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 210%;
+  height: 55%;
+  transform: translate(-50%, -50%) rotate(-24deg);
+  border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--orb-color), transparent 25%);
+  box-shadow:
+    0 0 10px color-mix(in srgb, var(--orb-color), transparent 40%),
+    inset 0 0 6px rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+  opacity: 0.75;
+}
+.orb-planet-ring::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  opacity: 0.4;
 }
 
 .selected .orb-planet {
   box-shadow: 
-    inset -10px -10px 20px rgba(0,0,0,0.8),
-    inset 4px 4px 15px rgba(255,255,255,0.9),
-    0 0 60px 10px color-mix(in srgb, var(--orb-color), transparent 20%);
+    inset -10px -10px 22px rgba(0,0,0,0.85),
+    inset 5px 5px 18px rgba(255,255,255,0.95),
+    0 0 65px 14px color-mix(in srgb, var(--orb-color), transparent 15%);
 }
 .selected .orb-planet::after {
-  inset: -4px;
-  box-shadow: inset 0 0 20px var(--orb-color), 0 0 40px var(--orb-color);
+  inset: -5px;
+  box-shadow: inset 0 0 20px var(--orb-color), 0 0 45px 5px var(--orb-color);
   opacity: 1;
+}
+
+/* Supernova Completion Effect */
+.supernova-burst {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffffff 10%, var(--burst-color, #ffdd55) 45%, transparent 75%);
+  animation: supernova-flash 0.65s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+  pointer-events: none;
+  z-index: 50;
+}
+.supernova-shockwave {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 25px var(--burst-color, #ffdd55);
+  animation: supernova-shock 0.65s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+  pointer-events: none;
+  z-index: 49;
+}
+@keyframes supernova-flash {
+  0% { transform: translate(-50%, -50%) scale(0.1); opacity: 1; filter: brightness(4); }
+  45% { transform: translate(-50%, -50%) scale(1.6); opacity: 0.95; filter: brightness(2.5); }
+  100% { transform: translate(-50%, -50%) scale(2.4); opacity: 0; filter: brightness(1) blur(4px); }
+}
+@keyframes supernova-shock {
+  0% { transform: translate(-50%, -50%) scale(0.2); opacity: 1; }
+  60% { opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(2.8); opacity: 0; }
+}
+
+/* Audio Visualizer Equalizer */
+.audio-equalizer {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 13px;
+  padding: 0 2px;
+}
+.eq-bar {
+  width: 2.5px;
+  border-radius: 1px;
+  background: #1ed760;
+  animation: eq-bounce 0.8s ease-in-out infinite alternate;
+}
+.eq-bar:nth-child(1) { height: 40%; animation-delay: -0.2s; }
+.eq-bar:nth-child(2) { height: 90%; animation-delay: -0.6s; }
+.eq-bar:nth-child(3) { height: 60%; animation-delay: -0.35s; }
+.eq-bar:nth-child(4) { height: 100%; animation-delay: -0.7s; }
+@keyframes eq-bounce {
+  0% { height: 20%; opacity: 0.6; }
+  100% { height: 100%; opacity: 1; }
+}
+
+/* Time Horizon States */
+.horizon-dimmed {
+  opacity: 0.38 !important;
+  filter: brightness(0.65) saturate(60%) !important;
+  transition: opacity 0.4s ease, filter 0.4s ease;
+}
+.horizon-focused {
+  filter: brightness(1.2) drop-shadow(0 0 15px var(--orb-color, #9b5be4)) !important;
+  transition: filter 0.4s ease;
 }
 
 .orb-label {
@@ -464,6 +705,18 @@ input[type=range]::-moz-range-thumb {
 }
 
 @media (max-width: 640px) {
+  .app-header { padding: 14px 12px; }
+  .header-inner { gap: 12px; }
+  .header-brand { align-items: center; }
+  .header-brand > span { margin-left: 0; }
+  .header-actions { width: 100%; gap: 8px; }
+  .header-add { width: 100%; justify-content: center; }
+  .header-utilities { width: 100%; flex-wrap: nowrap; justify-content: space-between; gap: 6px; }
+  .focus-audio { min-width: 0; flex: 1 1 auto; }
+  .header-manage { width: 40px; height: 40px; padding: 0; justify-content: center; }
+  .header-manage-label { display: none; }
+  .insight-dock { left: 12px; right: 12px; bottom: 16px; gap: 12px; }
+  .selected-panel-card { max-height: min(54dvh, 390px); overflow-y: auto; }
   body { overflow-x: hidden; }
   .orb-planet {
     max-width: 64px;
@@ -473,4 +726,15 @@ input[type=range]::-moz-range-thumb {
   .core-subtitle { font-size: 9px; }
   .cosmos-brightness-control { min-height: 34px; padding-inline: 8px; gap: 6px; }
   .cosmos-brightness-range { width: 72px; }
+}
+
+@media (max-width: 767px) {
+  .mobile-manage.panel-open {
+    bottom: calc(min(54dvh, 390px) + 24px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .core-body,
+  .core-body::after { animation: none; }
 }
