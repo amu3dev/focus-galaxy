@@ -28,7 +28,11 @@
 * { box-sizing: border-box; }
 html { background: hsl(var(--background)); }
 body {
-  @apply font-sans antialiased text-foreground bg-background;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: hsl(var(--foreground));
+  background-color: hsl(var(--background));
   margin: 0; min-width: 320px;
   overflow-x: hidden;
 }
