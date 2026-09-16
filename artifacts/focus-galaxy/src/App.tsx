@@ -302,6 +302,8 @@ function useParallax() {
   const mouseY = useMotionValue(0);
 
   const handleMouseMove = (e: React.MouseEvent) => {
+    // Portal targets follow the tilted scene; do not move them mid-click.
+    if (e.target instanceof Element && e.target.closest('#orb-hit-layer')) return;
     if (typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches) return;
     const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
     const x = (e.clientX - left) / width - 0.5;
@@ -1515,7 +1517,17 @@ function OrbComponent({
           className="orb-screen-visual"
           data-priority-id={priority.id}
           aria-hidden="true"
-          style={{ left: hitX, top: hitY, zIndex: depthZIndex, scale: depthScale, filter: depthFilter }}
+          style={{
+            left: hitX,
+            top: hitY,
+            width: size,
+            height: size,
+            x: '-50%',
+            y: '-50%',
+            zIndex: depthZIndex,
+            scale: depthScale,
+            filter: depthFilter,
+          }}
           animate={{ opacity: isUnrelated ? 0.72 : 1 }}
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
         >
