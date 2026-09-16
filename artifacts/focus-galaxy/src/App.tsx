@@ -270,7 +270,7 @@ function getSignalSummary(topPriorities: Priority[]) {
   const score = getFocusScore(lead);
   if (score >= 80) return `${lead.name} has the strongest pull right now. Give it one clear next move.`;
   if (score <= 60) return 'The field is balanced. Choose one priority to give a little more gravity.';
-  return `The field is forming around ${lead.name}. Tune its pull as your day changes.`;
+  return `The field is forming around ${lead.name}. Adjust its metrics as your day changes.`;
 }
 
 function getSubLabel(name: string) {
@@ -734,13 +734,13 @@ function RangeControl({
 }
 
 function FocusSignalPanel({
-  topPriorities,
+  rankedPriorities,
   onSelect,
   onRename,
   color,
   summary,
 }: {
-  topPriorities: Priority[];
+  rankedPriorities: Priority[];
   onSelect: (id: string) => void;
   onRename: (id: string, name: string) => void;
   color: string;
@@ -763,8 +763,8 @@ function FocusSignalPanel({
         {summary}
       </p>
       
-      <div className="flex flex-col gap-4 mt-auto">
-         {topPriorities.map((p, i) => (
+      <div data-testid="focus-signal-list" className="focus-signal-list flex flex-col gap-1 mt-auto">
+         {rankedPriorities.map((p, i) => (
            <div key={p.id} className="flex items-center gap-3 group w-full">
             <span className="text-white/40 text-[11px] font-display w-3 text-left font-bold">{i + 1}</span>
             <div className="w-3 h-3 rounded-full shadow-[0_0_8px_var(--c)]" style={{ '--c': p.hue, backgroundColor: p.hue } as any} />
@@ -870,11 +870,13 @@ function ManageTasksDialog({
   onClose,
   onSelect,
   onRename,
+  onRemove,
 }: {
   priorities: Priority[];
   onClose: () => void;
   onSelect: (id: string) => void;
   onRename: (id: string, name: string) => void;
+  onRemove: (id: string) => void;
 }) {
   const dialogRef = useDialogFocus<HTMLDivElement>(onClose);
 
@@ -902,7 +904,7 @@ function ManageTasksDialog({
         <div className="flex items-start justify-between gap-4 mb-5">
           <div>
             <h2 id="manage-tasks-title" className="font-display text-xl font-bold text-white tracking-wide">Manage priorities</h2>
-            <p className="text-white/60 text-xs mt-1.5 font-medium">Rename any pre-listed or added planet.</p>
+            <p className="text-white/60 text-xs mt-1.5 font-medium">Rename, select, or remove priorities here. Adjust metrics from Planet Detail.</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close dialog" className="w-8 h-8 rounded-full bg-white/5 border border-white/10 text-white/60 flex items-center justify-center hover:text-white hover:bg-white/10 transition-colors">
             <X size={16} />
@@ -933,9 +935,21 @@ function ManageTasksDialog({
                   onSelect(priority.id);
                   onClose();
                 }}
+                aria-label={`Select ${priority.name}`}
                 className="px-3 py-2 rounded-lg border border-white/10 text-[11px] font-bold text-white/60 hover:bg-white/10 hover:text-white transition-colors"
               >
-                Tune
+                Select
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm(`Remove ${priority.name} from orbit?`)) onRemove(priority.id);
+                }}
+                aria-label={`Remove ${priority.name}`}
+                title="Remove priority"
+                className="h-9 w-9 shrink-0 rounded-lg border border-white/10 text-white/40 flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 transition-colors"
+              >
+                <Trash2 size={15} aria-hidden="true" />
               </button>
             </div>
           ))}
@@ -1097,17 +1111,24 @@ function SelectedPanel({
         <button type="button" onClick={() => { if(window.confirm(`Remove ${priority.name} from orbit?`)) onRemove() }} aria-label="Delete priority" className="w-10 h-10 rounded-xl border border-white/10 bg-white/5 text-white/40 flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 transition-colors">
           <Trash2 size={16} />
         </button>
-         <button type="submit" className="flex-1 h-10 rounded-xl border border-white/10 bg-white/5 text-[13px] font-bold text-white hover:bg-white/10 transition-colors">
+        <button type="submit" className="flex-1 h-10 rounded-xl border border-white/10 bg-white/5 text-[13px] font-bold text-white hover:bg-white/10 transition-colors">
           Save Name
         </button>
         <button
           type="button"
           onClick={onComplete}
-          aria-label="Complete task and trigger supernova"
-          title="Complete task (Supernova)"
-          className="complete-task-corner flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-400/40 bg-emerald-400/15 text-emerald-300 transition-all hover:scale-105 hover:border-emerald-300/80 hover:bg-emerald-400/30 hover:text-emerald-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70"
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ' || event.key === 'Space' || event.key === 'Spacebar') {
+              event.preventDefault();
+              onComplete();
+            }
+          }}
+          aria-label="Complete task"
+          title="Complete task"
+          className="complete-task-corner flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-400/15 px-3 text-[13px] font-bold text-emerald-300 transition-all hover:scale-[1.01] hover:border-emerald-300/80 hover:bg-emerald-400/30 hover:text-emerald-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70"
         >
-          <CheckCircle2 size={17} />
+          <CheckCircle2 size={17} aria-hidden="true" />
+          <span>Complete Task</span>
         </button>
       </div>
    </form>
@@ -1311,16 +1332,14 @@ function SelectedOrbitRing({ priority }: { priority: Priority }) {
 function OrbComponent({ 
   priority, 
   index, 
-  selectedId, 
-  timeHorizon,
+  selectedId,
   onSelect,
   isCompleting,
   prefersReducedMotion 
 }: { 
   priority: Priority; 
   index: number; 
-  selectedId: string | null; 
-  timeHorizon: 'today' | 'week' | 'month';
+  selectedId: string | null;
   onSelect: (id: string) => void;
   isCompleting: boolean;
   prefersReducedMotion: boolean;
@@ -1398,11 +1417,11 @@ function OrbComponent({
     return `${50 + Math.sin(angle) * radius}%`;
   });
 
-  // Dynamic depth: sin(angle) > 0 is front half of orbit (closer), sin(angle) < 0 is back half
+  // Continuous depth keeps overlapping planets ordered by their orbital phase.
   const depthZIndex = useTransform(() => {
     if (isSelected) return 35;
     const sinVal = Math.sin(baseAngle + drift.get());
-    return sinVal > 0 ? 15 : 5; // 15 = in front of core (core is 10), 5 = behind core
+    return Math.round(10 + sinVal * 9);
   });
 
   const depthScale = useTransform(() => {
@@ -1419,13 +1438,6 @@ function OrbComponent({
   });
   
   const size = useTransform(() => 36 + importanceSpring.get() * 5.5);
-
-  // Time horizon focus evaluation:
-  const isHorizonFocused = timeHorizon === 'today'
-    ? (priority.urgency >= 7 || score >= 75)
-    : timeHorizon === 'month'
-      ? (priority.importance >= 7)
-      : true;
 
   // Gas giant planetary ring for high-energy or specific flagship priorities
   const hasPlanetaryRing = priority.energy >= 7 || priority.id === 'signalboard' || priority.id === 'job-search';
@@ -1465,7 +1477,7 @@ function OrbComponent({
 
   return (
     <motion.div
-      className={`orb-hit-container ${!isHorizonFocused ? 'horizon-dimmed' : ''}`}
+      className="orb-hit-container"
       style={{
         left: x,
         top: y,
@@ -1491,43 +1503,57 @@ function OrbComponent({
         </>
       )}
 
-      {/* Billboard wrapper counter-rotates the plane's tilt so planet & labels face camera directly */}
-      <div className="orb-billboard">
+      <div className="orb-billboard" aria-hidden="true">
         <motion.div
-          className={`orb-wrapper ${isSelected ? 'selected' : ''}`}
-          aria-hidden="true"
-          style={{ '--orb-color': priority.hue } as CSSProperties}
-          animate={{ scale: isHovered && !isCompleting ? 1.08 : 1 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-        >
-          <div className="relative">
-            <div className="absolute -top-3 -right-3 px-2 py-0.5 rounded-full text-[10px] font-bold font-display z-20 text-white backdrop-blur-md" style={{
-              backgroundColor: 'rgba(0,0,0,0.65)',
-              border: `1px solid ${priority.hue}70`,
-              boxShadow: `0 0 10px ${priority.hue}40`,
-            }}>
-              {score}
-            </div>
-
-            {hasPlanetaryRing && <div className="orb-planet-ring" />}
-
-            <motion.div
-              ref={planetRef}
-              className="orb-planet"
-              style={{
-                width: size,
-                height: size,
-              } as any}
-            />
-          </div>
-          <div className="orb-label mt-2 pointer-events-none">
-            <span className="orb-name block text-[13px] font-sans font-bold text-white tracking-wide">{priority.name}</span>
-            <span className="orb-sub block text-[9px] font-display font-bold tracking-widest mt-0.5" style={{ color: `${priority.hue}` }}>
-              {getSubLabel(priority.name)}
-            </span>
-          </div>
-        </motion.div>
+          ref={planetRef}
+          className="orb-anchor"
+          style={{ width: size, height: size }}
+        />
       </div>
+      {hitLayer && createPortal(
+        <motion.div
+          className="orb-screen-visual"
+          data-priority-id={priority.id}
+          aria-hidden="true"
+          style={{ left: hitX, top: hitY, zIndex: depthZIndex, scale: depthScale, filter: depthFilter }}
+          animate={{ opacity: isUnrelated ? 0.72 : 1 }}
+          transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+        >
+          <motion.div
+            className={`orb-wrapper ${isSelected ? 'selected' : ''}`}
+            style={{ '--orb-color': priority.hue } as CSSProperties}
+            animate={{ scale: isHovered && !isCompleting ? 1.08 : 1 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+          >
+            <div className="relative">
+              <div className="absolute -top-3 -right-3 px-2 py-0.5 rounded-full text-[10px] font-bold font-display z-20 text-white backdrop-blur-md" style={{
+                backgroundColor: 'rgba(0,0,0,0.65)',
+                border: `1px solid ${priority.hue}70`,
+                boxShadow: `0 0 10px ${priority.hue}40`,
+              }}>
+                {score}
+              </div>
+
+              {hasPlanetaryRing && <div className="orb-planet-ring" />}
+
+              <motion.div
+                className="orb-planet"
+                style={{
+                  width: size,
+                  height: size,
+                } as any}
+              />
+            </div>
+            <div className="orb-label mt-2 pointer-events-none">
+              <span className="orb-name block text-[13px] font-sans font-bold text-white tracking-wide">{priority.name}</span>
+              <span className="orb-sub block text-[9px] font-display font-bold tracking-widest mt-0.5" style={{ color: `${priority.hue}` }}>
+                {getSubLabel(priority.name)}
+              </span>
+            </div>
+          </motion.div>
+        </motion.div>,
+        hitLayer,
+      )}
       {hitLayer && createPortal(
         <motion.button
           type="button"
@@ -1660,7 +1686,6 @@ function FocusGalaxyContainer() {
   const [isZenMode, setIsZenMode] = useState(false);
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [cosmosBrightness, setCosmosBrightness] = useState(100);
-  const [timeHorizon, setTimeHorizon] = useState<'today' | 'week' | 'month'>('today');
   const { toast } = useToast();
   
   const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1781,7 +1806,11 @@ function FocusGalaxyContainer() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [priorities, selectedId, isAddOpen, isManageOpen]);
 
-  const topPriorities = [...priorities].sort((a, b) => getFocusScore(b) - getFocusScore(a)).slice(0, 3);
+  const rankedPriorities = useMemo(
+    () => [...priorities].sort((a, b) => getFocusScore(b) - getFocusScore(a)),
+    [priorities],
+  );
+  const topPriorities = rankedPriorities.slice(0, 3);
   const selectedPriority = priorities.find(p => p.id === selectedId);
   
   const insight = useMemo(() => {
@@ -1796,7 +1825,7 @@ function FocusGalaxyContainer() {
     if (score > 85) return `${selectedPriority.name} is pulling closest to now. Give it one clear next move before the rest of the sky gets louder.`;
     if (selectedPriority.importance > 8 && selectedPriority.urgency < 5) return `Important but not urgent. Protect time for ${selectedPriority.name} before it becomes an emergency.`;
     if (selectedPriority.energy > 8) return `High effort required. Break ${selectedPriority.name} into smaller pieces to reduce friction.`;
-    return `${selectedPriority.name} is steadily in orbit. Tune its metrics if the situation shifts.`;
+    return `${selectedPriority.name} is steadily in orbit. Adjust its metrics if the situation shifts.`;
   }, [selectedPriority, topPriorities, priorities.length]);
 
   const insightTitle = useMemo(() => {
@@ -1822,7 +1851,6 @@ function FocusGalaxyContainer() {
     '--cosmos-dim-opacity': String(Math.max(0, (100 - cosmosBrightness) / 100 * 0.55)),
     '--cosmos-lift-opacity': String(Math.max(0, (cosmosBrightness - 100) / 30 * 0.32)),
   } as CSSProperties;
-  const horizonOptions = ['today', 'week', 'month'] as const;
 
   return (
     <div 
@@ -1864,43 +1892,6 @@ function FocusGalaxyContainer() {
           </div>
           
           <div className="header-actions flex flex-col md:flex-row items-center gap-3 pointer-events-auto">
-            {/* Functional Time Horizon Selector */}
-            <div className="hidden md:flex items-center rounded-full bg-white/5 border border-white/10 p-1 backdrop-blur-md" role="tablist" aria-label="Time Horizon filter">
-              {horizonOptions.map((horizon) => (
-                <button
-                  key={horizon}
-                  id={`horizon-${horizon}`}
-                  type="button"
-                  role="tab"
-                  aria-selected={timeHorizon === horizon}
-                  aria-controls="cosmos-horizon-panel"
-                  tabIndex={timeHorizon === horizon ? 0 : -1}
-                  onClick={() => setTimeHorizon(horizon)}
-                  onKeyDown={(event) => {
-                    const currentIndex = horizonOptions.indexOf(horizon);
-                    let nextIndex = currentIndex;
-                    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % horizonOptions.length;
-                    else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + horizonOptions.length) % horizonOptions.length;
-                    else if (event.key === 'Home') nextIndex = 0;
-                    else if (event.key === 'End') nextIndex = horizonOptions.length - 1;
-                    else return;
-                    event.preventDefault();
-                    event.stopPropagation();
-                    const nextHorizon = horizonOptions[nextIndex];
-                    setTimeHorizon(nextHorizon);
-                    requestAnimationFrame(() => document.getElementById(`horizon-${nextHorizon}`)?.focus());
-                  }}
-                  className={`px-3.5 py-1.5 rounded-full text-[11px] font-bold transition-all ${
-                    timeHorizon === horizon
-                      ? 'bg-primary/30 text-white shadow-[0_0_12px_rgba(155,91,228,0.4)] border border-primary/40'
-                      : 'text-white/50 hover:text-white border border-transparent'
-                  }`}
-                >
-                  {horizon === 'today' ? 'Today' : horizon === 'week' ? 'This Week' : 'This Month'}
-                </button>
-              ))}
-            </div>
-
             <button onClick={() => setIsAddOpen(true)} aria-label="Add priority" className="header-add flex items-center gap-2 px-5 py-2 rounded-full border border-primary/50 bg-primary/20 hover:bg-primary/30 text-white text-xs font-bold transition-colors shadow-[0_0_15px_rgba(155,91,228,0.3)]">
               <Plus size={14} strokeWidth={3} /> Add Priority
             </button>
@@ -1927,9 +1918,6 @@ function FocusGalaxyContainer() {
 
       <motion.div
         className="galaxy-viewport absolute inset-0 z-10 pointer-events-none"
-        id="cosmos-horizon-panel"
-        role="tabpanel"
-        aria-labelledby={`horizon-${timeHorizon}`}
         style={{ x: panX, y: panY, rotateX: tiltX, rotateY: tiltY, transformPerspective: 1400, transformStyle: 'preserve-3d' }}
       >
         <div className="galaxy-layer absolute inset-0 transform-gpu origin-center pointer-events-none">
@@ -1951,7 +1939,6 @@ function FocusGalaxyContainer() {
                   priority={p}
                   index={i}
                   selectedId={selectedId}
-                  timeHorizon={timeHorizon}
                   onSelect={selectPriority}
                   isCompleting={p.id === completingId}
                   prefersReducedMotion={prefersReducedMotion}
@@ -1994,7 +1981,7 @@ function FocusGalaxyContainer() {
         
         <div className="panel-slot panel-slot-signal w-full xl:w-[min(30vw,400px)] shrink-0 transform-gpu transition-all duration-500 hidden md:block">
            <FocusSignalPanel 
-             topPriorities={topPriorities} 
+             rankedPriorities={rankedPriorities}
              onSelect={selectPriority}
              onRename={renamePriority}
              color={topPriorities[0]?.hue || '#9b5be4'}
@@ -2047,6 +2034,7 @@ function FocusGalaxyContainer() {
             onClose={() => setIsManageOpen(false)}
             onSelect={selectPriority}
             onRename={renamePriority}
+            onRemove={removePriority}
           />
         )}
       </AnimatePresence>

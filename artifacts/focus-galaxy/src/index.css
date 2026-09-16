@@ -171,6 +171,21 @@ body {
   pointer-events: none;
   z-index: 0;
 }
+.focus-signal-list {
+  min-height: 0;
+  max-height: clamp(96px, 21dvh, 176px);
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.24) transparent;
+}
+.focus-signal-list::-webkit-scrollbar {
+  width: 4px;
+}
+.focus-signal-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.24);
+}
 
 /* Pseudo-3D scene */
 .focus-galaxy-app {
@@ -210,6 +225,17 @@ body {
   transform-style: preserve-3d;
   transform: rotateZ(10deg) rotateX(-56deg);
   pointer-events: auto;
+}
+.orb-anchor {
+  display: block;
+  opacity: 0;
+  pointer-events: none;
+}
+.orb-screen-visual {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  transform-style: flat;
+  pointer-events: none;
 }
 .orb-hit-container {
   pointer-events: none;
@@ -265,8 +291,8 @@ body {
 }
 
 @media (min-width: 1280px) {
-  .panel-slot-signal,
-  .panel-slot-selected { height: 320px; }
+  .panel-slot-signal { height: 320px; }
+  .panel-slot-selected { height: 380px; }
   .panel-slot-insight { height: 290px; }
   .panel-slot-insight > .panel-card { height: 100%; min-height: 0; }
   .panel-slot-signal { transform: translateZ(22px) rotateZ(-3deg) rotateX(2deg); }
@@ -567,12 +593,6 @@ body {
   100% { height: 100%; opacity: 1; }
 }
 
-/* Time Horizon States */
-.horizon-dimmed {
-  opacity: 0.38 !important;
-  filter: brightness(0.65) saturate(60%) !important;
-  transition: opacity 0.4s ease, filter 0.4s ease;
-}
 .orb-label {
   text-align: center;
   margin-top: 4px;
@@ -720,6 +740,12 @@ input[type=range]::-moz-range-thumb {
   .insight-dock .panel-slot-insight > .panel-card {
     height: 100%;
     min-height: 0;
+  }
+  .insight-dock .panel-slot-selected {
+    height: 320px;
+  }
+  .focus-signal-list {
+    max-height: clamp(80px, 15dvh, 108px);
   }
   .insight-dock .selected-panel-card {
     overflow-y: auto;
