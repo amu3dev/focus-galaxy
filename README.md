@@ -2,6 +2,16 @@
 
 Focus Galaxy is a local-first focus and priority map that turns tasks into an interactive galaxy and shows what deserves attention now.
 
+## Product screenshots
+
+![Focus Galaxy running in a desktop browser, captured at 1440×900](docs/assets/focus-galaxy-desktop.jpg)
+
+*Captured from the running app with its six seeded sample priorities.*
+
+![Focus Galaxy running in a phone-sized browser, captured at 390×844](docs/assets/focus-galaxy-mobile.jpg)
+
+*The same live app and sample priorities at a phone-sized viewport.*
+
 ## What it does
 
 - Maps importance, urgency, and effort to visual position, size, and activity.
