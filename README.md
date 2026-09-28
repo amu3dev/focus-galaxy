@@ -1,10 +1,16 @@
 # Focus Galaxy
 
-> **Experimental MVP:** a local-first focus and priority map that turns tasks into an interactive galaxy and shows what deserves attention now.
+Focus Galaxy is a local-first focus and priority map that turns tasks into an interactive galaxy and shows what deserves attention now.
 
-![Synthetic Focus Galaxy interaction — no real task data](docs/assets/focus-galaxy-synthetic.svg)
+## Product screenshots
 
-> **Synthetic UI proof:** generated tasks and scores; no real user data. The public repository has no hosted demo or release yet.
+![Focus Galaxy running in a desktop browser, captured at 1440×900](https://raw.githubusercontent.com/amu3dev/focus-galaxy/cosmos/next-level-experience/docs/assets/focus-galaxy-desktop.jpg)
+
+*Captured from the running app with its six seeded sample priorities.*
+
+![Focus Galaxy running in a phone-sized browser, captured at 390×844](https://raw.githubusercontent.com/amu3dev/focus-galaxy/cosmos/next-level-experience/docs/assets/focus-galaxy-mobile.jpg)
+
+*The same live app and sample priorities at a phone-sized viewport.*
 
 ## What it does
 
@@ -40,6 +46,16 @@ Useful checks:
 pnpm run typecheck
 pnpm run build
 ```
+
+## Optional Spotify playback
+
+Spotify playback is opt-in. Create a Spotify Developer app, add the exact URL where Focus Galaxy runs to its Redirect URI allowlist, then set the public client ID in `.env.local`:
+
+```bash
+VITE_SPOTIFY_CLIENT_ID=your_client_id
+```
+
+The app uses Authorization Code with PKCE, so no Spotify client secret belongs in the frontend. A user must explicitly authorize the app, and browser playback requires Spotify Premium; the built-in generated focus music remains available when Spotify is not configured or supported.
 
 ## Project structure
 
