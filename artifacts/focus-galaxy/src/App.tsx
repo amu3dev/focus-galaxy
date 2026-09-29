@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef, useState, memo, type CSSProperties, type FormEvent } from 'react';
-import { Plus, RotateCcw, X, Target, Orbit, Trash2, ListChecks, Volume2, VolumeX, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, memo, type CSSProperties, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import { createPortal } from 'react-dom';
+import { Plus, RotateCcw, X, Target, Activity, Orbit, Trash2, ListChecks, Volume2, VolumeX, Music2, CheckCircle2, ChevronDown, ChevronUp, SunMedium } from 'lucide-react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { useToast } from '@/hooks/use-toast';
 import NotFound from '@/pages/not-found';
-import { Route, Switch, Router as WouterRouter } from 'wouter';
-import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, animate } from 'framer-motion';
+import { Route, Switch } from 'wouter';
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
 
 type Priority = {
   id: string;
@@ -19,7 +21,181 @@ type Priority = {
 type MetricKey = 'importance' | 'urgency' | 'energy';
 
 const STORAGE_KEY = 'focus-galaxy-priorities-v2';
+const SPOTIFY_SESSION_KEY = 'focus-galaxy-spotify-session';
+const SPOTIFY_VERIFIER_KEY = 'focus-galaxy-spotify-verifier';
+const SPOTIFY_STATE_KEY = 'focus-galaxy-spotify-state';
+const SPOTIFY_SCOPE = 'streaming user-read-playback-state user-modify-playback-state';
+const spotifyClientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID?.trim() ?? '';
 const queryClient = new QueryClient();
+
+type SpotifySession = {
+  accessToken: string;
+  expiresAt: number;
+  refreshToken?: string;
+};
+
+type SpotifyPlayerState = {
+  paused: boolean;
+};
+
+type SpotifyPlayer = {
+  addListener: (event: string, callback: (data?: any) => void) => boolean;
+  connect: () => Promise<boolean>;
+  disconnect: () => void;
+  getCurrentState: () => Promise<SpotifyPlayerState | null>;
+  pause: () => Promise<void>;
+  togglePlay: () => Promise<void>;
+};
+
+type SpotifySdk = {
+  Player: new (options: {
+    name: string;
+    getOAuthToken: (callback: (token: string) => void) => void;
+    volume: number;
+  }) => SpotifyPlayer;
+};
+
+type SpotifyWindow = Window & {
+  Spotify?: SpotifySdk;
+  onSpotifyWebPlaybackSDKReady?: () => void;
+};
+
+let spotifySdkPromise: Promise<SpotifySdk> | null = null;
+
+function getSpotifyRedirectUri() {
+  return `${window.location.origin}${window.location.pathname}`;
+}
+
+function encodeBase64Url(bytes: Uint8Array) {
+  let binary = '';
+  bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+}
+
+function createCodeVerifier() {
+  const bytes = new Uint8Array(64);
+  crypto.getRandomValues(bytes);
+  return encodeBase64Url(bytes);
+}
+
+async function createCodeChallenge(verifier: string) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+  return encodeBase64Url(new Uint8Array(digest));
+}
+
+function readSpotifySession(): SpotifySession | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const session = JSON.parse(window.sessionStorage.getItem(SPOTIFY_SESSION_KEY) || 'null') as SpotifySession | null;
+    return session?.accessToken && session.expiresAt ? session : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSpotifySession(session: SpotifySession | null) {
+  if (typeof window === 'undefined') return;
+  if (session) window.sessionStorage.setItem(SPOTIFY_SESSION_KEY, JSON.stringify(session));
+  else window.sessionStorage.removeItem(SPOTIFY_SESSION_KEY);
+}
+
+async function spotifyRequest(path: string, token: string, init?: RequestInit) {
+  const response = await fetch(`https://api.spotify.com/v1${path}`, {
+    ...init,
+    headers: { Authorization: `Bearer ${token}`, ...init?.headers },
+  });
+  if (!response.ok) throw new Error(`Spotify request failed: ${response.status}`);
+  return response.status === 204 ? null : response.json();
+}
+
+async function loadSpotifySdk() {
+  const spotifyWindow = window as SpotifyWindow;
+  if (spotifyWindow.Spotify?.Player) return spotifyWindow.Spotify;
+  if (spotifySdkPromise) return spotifySdkPromise;
+
+  spotifySdkPromise = new Promise<SpotifySdk>((resolve, reject) => {
+    const timeout = window.setTimeout(() => reject(new Error('Spotify SDK timed out')), 10000);
+    const finish = (error?: Error) => {
+      window.clearTimeout(timeout);
+      if (error) reject(error);
+      else if (spotifyWindow.Spotify?.Player) resolve(spotifyWindow.Spotify);
+      else reject(new Error('Spotify SDK unavailable'));
+    };
+    spotifyWindow.onSpotifyWebPlaybackSDKReady = () => finish();
+    const script = document.querySelector<HTMLScriptElement>('script[data-focus-galaxy-spotify-sdk]') || document.createElement('script');
+    if (!script.src) {
+      script.dataset.focusGalaxySpotifySdk = 'true';
+      script.src = 'https://sdk.scdn.co/spotify-player.js';
+      script.async = true;
+      script.addEventListener('error', () => finish(new Error('Spotify SDK failed to load')), { once: true });
+      document.head.appendChild(script);
+    }
+    if ((spotifyWindow.Spotify?.Player)) finish();
+  });
+  return spotifySdkPromise;
+}
+
+async function exchangeSpotifyCode(code: string, verifier: string) {
+  const body = new URLSearchParams({
+    client_id: spotifyClientId,
+    grant_type: 'authorization_code',
+    code,
+    redirect_uri: getSpotifyRedirectUri(),
+    code_verifier: verifier,
+  });
+  const response = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+  if (!response.ok) throw new Error('Spotify authorization failed');
+  const token = await response.json() as { access_token: string; expires_in: number; refresh_token?: string };
+  return {
+    accessToken: token.access_token,
+    expiresAt: Date.now() + token.expires_in * 1000,
+    refreshToken: token.refresh_token,
+  } satisfies SpotifySession;
+}
+
+async function refreshSpotifySession(session: SpotifySession) {
+  if (!session.refreshToken) throw new Error('Spotify session expired');
+  const body = new URLSearchParams({
+    client_id: spotifyClientId,
+    grant_type: 'refresh_token',
+    refresh_token: session.refreshToken,
+  });
+  const response = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+  if (!response.ok) throw new Error('Spotify session refresh failed');
+  const token = await response.json() as { access_token: string; expires_in: number; refresh_token?: string };
+  return {
+    accessToken: token.access_token,
+    expiresAt: Date.now() + token.expires_in * 1000,
+    refreshToken: token.refresh_token || session.refreshToken,
+  } satisfies SpotifySession;
+}
+
+async function startSpotifyAuthorization() {
+  const verifier = createCodeVerifier();
+  const state = createCodeVerifier();
+  const challenge = await createCodeChallenge(verifier);
+  window.sessionStorage.setItem(SPOTIFY_VERIFIER_KEY, verifier);
+  window.sessionStorage.setItem(SPOTIFY_STATE_KEY, state);
+  const authorizeUrl = new URL('https://accounts.spotify.com/authorize');
+  authorizeUrl.search = new URLSearchParams({
+    client_id: spotifyClientId,
+    response_type: 'code',
+    redirect_uri: getSpotifyRedirectUri(),
+    code_challenge_method: 'S256',
+    code_challenge: challenge,
+    state,
+    scope: SPOTIFY_SCOPE,
+  }).toString();
+  window.location.assign(authorizeUrl.toString());
+}
 
 const seedPriorities: Priority[] = [
   { id: 'job-search', name: 'Job Search', importance: 8, urgency: 9, energy: 7, hue: '#f04e76' },
@@ -30,10 +206,83 @@ const seedPriorities: Priority[] = [
   { id: 'health', name: 'Health', importance: 8, urgency: 8, energy: 5, hue: '#85d852' },
 ];
 
-const orbitAngles = [-88, -31, 30, 93, 151, 215, 270];
+function getPlanetBaseAngle(id: string): number {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = ((hash << 5) - hash) + id.charCodeAt(i);
+    hash |= 0;
+  }
+  const degrees = Math.abs(hash) % 360;
+  return (degrees * Math.PI) / 180;
+}
+
+function playCosmicChime(freq = 523.25) {
+  try {
+    const AudioContextClass = window.AudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    gain.gain.setValueAtTime(0.001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.55);
+    setTimeout(() => { void ctx.close(); }, 700);
+  } catch {}
+}
+
+function playSupernovaChime() {
+  try {
+    const AudioContextClass = window.AudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    const chord = [523.25, 659.25, 783.99, 1046.5];
+    chord.forEach((note, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      const startT = ctx.currentTime + i * 0.07;
+      osc.frequency.setValueAtTime(note, startT);
+      gain.gain.setValueAtTime(0.001, startT);
+      gain.gain.exponentialRampToValueAtTime(0.09, startT + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startT + 0.85);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(startT);
+      osc.stop(startT + 0.9);
+    });
+    setTimeout(() => { void ctx.close(); }, 1400);
+  } catch {}
+}
 
 function getFocusScore(priority: Pick<Priority, MetricKey>) {
   return Math.round((priority.importance * 0.45 + priority.urgency * 0.4 + priority.energy * 0.15) * 10);
+}
+
+function getSignalSummary(topPriorities: Priority[]) {
+  const lead = topPriorities[0];
+  if (!lead) return 'No signal yet. Place a priority in orbit to begin.';
+  const score = getFocusScore(lead);
+  if (score >= 80) return `${lead.name} has the strongest pull right now. Give it one clear next move.`;
+  if (score <= 60) return 'The field is balanced. Choose one priority to give a little more gravity.';
+  return `The field is forming around ${lead.name}. Adjust its metrics as your day changes.`;
+}
+
+function getSubLabel(name: string) {
+  const map: Record<string, string> = {
+    'Health': 'BALANCE',
+    'SignalBoard': 'BUILD',
+    'Job Search': 'FOCUS',
+    'Learning': 'GROW',
+    'Consulting': 'LEVERAGE',
+    'Family': 'TOGETHER'
+  };
+  return map[name] || 'ORBITING';
 }
 
 function readPriorities(): Priority[] {
@@ -53,6 +302,8 @@ function useParallax() {
   const mouseY = useMotionValue(0);
 
   const handleMouseMove = (e: React.MouseEvent) => {
+    // Portal targets follow the tilted scene; do not move them mid-click.
+    if (e.target instanceof Element && e.target.closest('#orb-hit-layer')) return;
     if (typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches) return;
     const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
     const x = (e.clientX - left) / width - 0.5;
@@ -71,12 +322,12 @@ function useParallax() {
 
 function AppLogo() {
   return (
-    <a className="inline-flex items-center gap-3 text-white no-underline hover:scale-[1.02] transition-transform" href="/" data-testid="link-home">
-      <div className="w-8 h-8 rounded-full border border-primary flex items-center justify-center relative shadow-[0_0_15px_rgba(155,91,228,0.4)]">
+    <a className="inline-flex items-center gap-3 text-white no-underline hover:scale-[1.02] transition-transform pointer-events-auto" href="/" data-testid="link-home">
+      <div className="w-8 h-8 rounded-full border-[1.5px] border-primary flex items-center justify-center relative shadow-[0_0_20px_rgba(155,91,228,0.6)]">
          <div className="w-4 h-1 border border-primary/80 rounded-full -rotate-45" />
          <div className="w-1.5 h-1.5 bg-white rounded-full absolute" />
       </div>
-      <span className="font-display font-semibold text-lg tracking-widest uppercase">Focus Galaxy</span>
+      <span className="font-sans font-bold text-[16px] tracking-widest uppercase">Focus Galaxy</span>
     </a>
   );
 }
@@ -84,10 +335,18 @@ function AppLogo() {
 function FocusAudio() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [style, setStyle] = useState<'classical' | 'baroque' | 'nocturne'>('classical');
+  const [audioSource, setAudioSource] = useState<'local' | 'spotify'>('local');
+  const [spotifyStatus, setSpotifyStatus] = useState<'unavailable' | 'idle' | 'connecting' | 'ready' | 'playing' | 'error'>(() => spotifyClientId ? 'idle' : 'unavailable');
+  const [spotifyIsPlaying, setSpotifyIsPlaying] = useState(false);
+  const [spotifyMessage, setSpotifyMessage] = useState('');
   const audioRef = useRef<{
     context: AudioContext;
     timer: number;
   } | null>(null);
+  const spotifySessionRef = useRef<SpotifySession | null>(readSpotifySession());
+  const spotifyPlayerRef = useRef<SpotifyPlayer | null>(null);
+  const spotifyDeviceIdRef = useRef<string | null>(null);
+  const disposedRef = useRef(false);
 
   const stopAudio = () => {
     const audio = audioRef.current;
@@ -99,6 +358,7 @@ function FocusAudio() {
   };
 
   const startAudio = () => {
+    if (audioRef.current) return;
     const AudioContextClass = window.AudioContext;
     const context = new AudioContextClass();
     const master = context.createGain();
@@ -181,30 +441,232 @@ function FocusAudio() {
     setIsPlaying(true);
   };
 
+  const getSpotifyAccessToken = async () => {
+    const session = spotifySessionRef.current;
+    if (!session) throw new Error('Spotify is not connected');
+    if (session.expiresAt > Date.now() + 60000) return session.accessToken;
+    try {
+      const refreshed = await refreshSpotifySession(session);
+      spotifySessionRef.current = refreshed;
+      saveSpotifySession(refreshed);
+      return refreshed.accessToken;
+    } catch (error) {
+      spotifySessionRef.current = null;
+      saveSpotifySession(null);
+      throw error;
+    }
+  };
+
+  const pauseSpotify = async () => {
+    const player = spotifyPlayerRef.current;
+    if (!player) return;
+    try {
+      await player.pause();
+      setSpotifyIsPlaying(false);
+      setSpotifyStatus('ready');
+    } catch {
+      setSpotifyMessage('Spotify could not pause; local focus music remains available.');
+    }
+  };
+
+  const activateSpotify = async () => {
+    const player = spotifyPlayerRef.current;
+    const deviceId = spotifyDeviceIdRef.current;
+    if (!player || !deviceId) {
+      setSpotifyMessage('Spotify is still connecting.');
+      return;
+    }
+    const wasLocalPlaying = Boolean(audioRef.current);
+    try {
+      const token = await getSpotifyAccessToken();
+      const playerState = await player.getCurrentState();
+      if (playerState) {
+        if (playerState.paused) await player.togglePlay();
+      } else {
+        const current = await spotifyRequest('/me/player', token) as { item?: unknown } | null;
+        if (!current?.item) {
+          setSpotifyStatus('ready');
+          setSpotifyMessage('Start a track in Spotify, then choose Spotify here.');
+          return;
+        }
+        await spotifyRequest('/me/player', token, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ device_ids: [deviceId], play: true }),
+        });
+      }
+      if (wasLocalPlaying) stopAudio();
+      setAudioSource('spotify');
+      setSpotifyIsPlaying(true);
+      setSpotifyStatus('playing');
+      setSpotifyMessage('');
+    } catch {
+      setSpotifyStatus('error');
+      setSpotifyMessage('Spotify playback is unavailable; local focus music remains available.');
+      setAudioSource('local');
+    }
+  };
+
+  const connectSpotifyPlayer = async () => {
+    if (!spotifyClientId || disposedRef.current || spotifyPlayerRef.current) return;
+    setSpotifyStatus('connecting');
+    setSpotifyMessage('');
+    try {
+      const sdk = await loadSpotifySdk();
+      if (disposedRef.current) return;
+      const player = new sdk.Player({
+        name: 'Focus Galaxy',
+        getOAuthToken: (callback) => {
+          void getSpotifyAccessToken().then(callback).catch(() => callback(''));
+        },
+        volume: 0.5,
+      });
+      player.addListener('ready', (data) => {
+        const deviceId = data?.device_id as string | undefined;
+        if (!deviceId) return;
+        spotifyDeviceIdRef.current = deviceId;
+        setSpotifyStatus('ready');
+        void activateSpotify();
+      });
+      player.addListener('not_ready', () => {
+        setSpotifyStatus('ready');
+        setSpotifyMessage('Spotify browser playback went offline.');
+      });
+      player.addListener('player_state_changed', (data) => {
+        if (typeof data?.paused !== 'boolean') return;
+        setSpotifyIsPlaying(!data.paused);
+        setSpotifyStatus(data.paused ? 'ready' : 'playing');
+      });
+      player.addListener('initialization_error', () => {
+        setSpotifyStatus('error');
+        setSpotifyMessage('Spotify playback is not supported in this browser.');
+      });
+      player.addListener('authentication_error', () => {
+        setSpotifyStatus('error');
+        setSpotifyMessage('Spotify connection expired. Connect again to continue.');
+      });
+      player.addListener('account_error', () => {
+        setSpotifyStatus('error');
+        setSpotifyMessage('Spotify browser playback requires a Premium account.');
+        setAudioSource('local');
+      });
+      spotifyPlayerRef.current = player;
+      if (!await player.connect()) throw new Error('Spotify player failed to connect');
+    } catch {
+      spotifyPlayerRef.current?.disconnect();
+      spotifyPlayerRef.current = null;
+      setSpotifyStatus('error');
+      setSpotifyMessage('Spotify is unavailable; local focus music remains available.');
+    }
+  };
+
+  const handleSpotifyClick = () => {
+    if (!spotifyClientId || spotifyStatus === 'connecting') return;
+    if (spotifyPlayerRef.current) {
+      if (audioSource === 'spotify') {
+        setAudioSource('local');
+        void pauseSpotify();
+      } else {
+        void activateSpotify();
+      }
+      return;
+    }
+    spotifySessionRef.current = null;
+    saveSpotifySession(null);
+    void startSpotifyAuthorization().catch(() => {
+      setSpotifyStatus('error');
+      setSpotifyMessage('Spotify authorization could not start.');
+    });
+  };
+
+  useEffect(() => {
+    if (!spotifyClientId) return;
+    const params = new URLSearchParams(window.location.search);
+    const cleanupCallbackUrl = () => window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.hash}`);
+    const callbackError = params.get('error');
+    if (callbackError) {
+      cleanupCallbackUrl();
+      setSpotifyStatus('error');
+      setSpotifyMessage('Spotify authorization was cancelled.');
+      return;
+    }
+    const code = params.get('code');
+    if (code) {
+      const verifier = window.sessionStorage.getItem(SPOTIFY_VERIFIER_KEY);
+      const expectedState = window.sessionStorage.getItem(SPOTIFY_STATE_KEY);
+      const returnedState = params.get('state');
+      window.sessionStorage.removeItem(SPOTIFY_VERIFIER_KEY);
+      window.sessionStorage.removeItem(SPOTIFY_STATE_KEY);
+      cleanupCallbackUrl();
+      if (!verifier || !expectedState || returnedState !== expectedState) {
+        setSpotifyStatus('error');
+        setSpotifyMessage('Spotify authorization could not be verified.');
+        return;
+      }
+      setSpotifyStatus('connecting');
+      void exchangeSpotifyCode(code, verifier).then((session) => {
+        spotifySessionRef.current = session;
+        saveSpotifySession(session);
+        return connectSpotifyPlayer();
+      }).catch(() => {
+        setSpotifyStatus('error');
+        setSpotifyMessage('Spotify authorization failed; local focus music remains available.');
+      });
+      return;
+    }
+    if (spotifySessionRef.current) void connectSpotifyPlayer();
+  }, []);
+
   useEffect(() => () => {
+    disposedRef.current = true;
     const audio = audioRef.current;
     if (audio) {
       window.clearInterval(audio.timer);
       void audio.context.close();
     }
+    spotifyPlayerRef.current?.disconnect();
   }, []);
 
+  const spotifyConnected = spotifyStatus === 'ready' || spotifyStatus === 'playing';
+  const isSourcePlaying = audioSource === 'spotify' ? spotifyIsPlaying : isPlaying;
+  const spotifyLabel = !spotifyClientId
+    ? 'Spotify unavailable'
+    : spotifyConnected
+      ? audioSource === 'spotify' ? 'Use local focus music' : 'Use Spotify focus music'
+      : 'Connect Spotify';
+
   return (
-    <div className="flex items-center rounded-full border border-white/10 bg-white/5 backdrop-blur-md overflow-hidden">
+    <div className="focus-audio flex items-center rounded-full border border-white/10 bg-white/5 backdrop-blur-md overflow-hidden">
       <button
         type="button"
-        onClick={isPlaying ? stopAudio : startAudio}
+        onClick={() => {
+          if (audioSource === 'spotify') {
+            if (spotifyIsPlaying) void pauseSpotify();
+            else void activateSpotify();
+          } else if (isPlaying) stopAudio();
+          else startAudio();
+        }}
         className="flex items-center gap-2 px-3 py-2 text-white/70 hover:bg-white/10 hover:text-white transition-all text-xs font-semibold"
-        aria-label={isPlaying ? 'Pause classical focus music' : 'Play classical focus music'}
-        title={isPlaying ? 'Pause classical focus music' : 'Play classical focus music'}
+        aria-label={isSourcePlaying ? 'Pause focus music' : 'Play focus music'}
+        title={isSourcePlaying ? 'Pause focus music' : 'Play focus music'}
       >
-        {isPlaying ? <Volume2 size={15} /> : <VolumeX size={15} />}
+        {isSourcePlaying ? (
+          <>
+            <Volume2 size={15} />
+            <span className="audio-equalizer" aria-hidden="true">
+              <span className="eq-bar" />
+              <span className="eq-bar" />
+              <span className="eq-bar" />
+              <span className="eq-bar" />
+            </span>
+          </>
+        ) : <VolumeX size={15} />}
       </button>
       <select
         value={style}
         aria-label="Choose focus music"
         onChange={(event) => {
-          if (isPlaying) stopAudio();
+          if (audioSource === 'local' && isPlaying) stopAudio();
           setStyle(event.target.value as 'classical' | 'baroque' | 'nocturne');
         }}
         className="hidden sm:block max-w-[126px] border-0 border-l border-white/10 bg-transparent py-2 pl-2 pr-7 text-[11px] font-semibold text-white/75 outline-none cursor-pointer"
@@ -213,6 +675,19 @@ function FocusAudio() {
         <option value="baroque" className="bg-[#100d18]">Baroque Focus</option>
         <option value="nocturne" className="bg-[#100d18]">Quiet Nocturne</option>
       </select>
+      <button
+        type="button"
+        data-testid="spotify-connect"
+        onClick={handleSpotifyClick}
+        disabled={!spotifyClientId || spotifyStatus === 'connecting'}
+        aria-label={spotifyLabel}
+        title={spotifyMessage || spotifyLabel}
+        className={`flex items-center gap-1.5 border-l border-white/10 px-3 py-2 text-[11px] font-semibold transition-colors ${spotifyConnected && audioSource === 'spotify' ? 'text-[#1ed760]' : 'text-white/60 hover:bg-white/10 hover:text-white'} disabled:cursor-not-allowed disabled:opacity-45`}
+      >
+        <Music2 size={14} />
+        <span className="hidden sm:inline">Spotify</span>
+      </button>
+      <span className="sr-only" role="status" aria-live="polite">{spotifyMessage}</span>
     </div>
   );
 }
@@ -231,25 +706,28 @@ function RangeControl({
   return (
     <div className="group">
       <div className="flex justify-between text-[11px] mb-2">
-        <span className="text-muted-foreground group-hover:text-white/80 transition-colors uppercase tracking-wider">{label}</span>
-        <span className="font-display font-medium text-white">{value}</span>
+        <span className="text-white/60 group-hover:text-white/80 transition-colors uppercase tracking-widest font-semibold">{label}</span>
+        <span className="font-sans font-bold text-white text-[13px]">{value}</span>
       </div>
-      <div className="relative h-[4px] bg-white/10 rounded-full w-full flex items-center">
-        <motion.div 
-           className="absolute left-0 h-full rounded-full" 
-           style={{ backgroundColor: color }}
-           animate={{ width: `${(value/10)*100}%` }}
-           transition={{ type: 'spring', damping: 20, stiffness: 200 }}
-        />
+      <div className="relative h-7 w-full flex items-center">
+        <div className="range-track absolute left-0 right-0 h-[6px] rounded-full">
+          <motion.div
+             className="absolute left-0 h-full rounded-full"
+             style={{ backgroundColor: color, boxShadow: `0 0 10px ${color}` }}
+             animate={{ width: `${(value/10)*100}%` }}
+             transition={{ type: 'spring', damping: 20, stiffness: 200 }}
+          />
+        </div>
         <input 
-          type="range" min="1" max="10" step="1" value={value} aria-label={label}
+          type="range" min="1" max="10" step="1" value={value} 
+          aria-label={label}
           onChange={(e) => onChange(Number(e.target.value))}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+          className="metric-range absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
         />
         <motion.div 
-          className="absolute w-3 h-3 rounded-full bg-white shadow-[0_0_8px_var(--c)] pointer-events-none"
+          className="absolute top-1/2 w-4 h-4 rounded-full bg-white shadow-[0_0_10px_var(--c)] pointer-events-none -translate-y-1/2"
           style={{ '--c': color } as any}
-          animate={{ left: `calc(${(value/10)*100}% - 6px)` }}
+          animate={{ left: `calc(${(value/10)*100}% - 8px)` }}
           transition={{ type: 'spring', damping: 20, stiffness: 200 }}
         />
       </div>
@@ -258,29 +736,40 @@ function RangeControl({
 }
 
 function FocusSignalPanel({
-  topPriorities,
+  rankedPriorities,
   onSelect,
   onRename,
+  color,
+  summary,
 }: {
-  topPriorities: Priority[];
+  rankedPriorities: Priority[];
   onSelect: (id: string) => void;
   onRename: (id: string, name: string) => void;
+  color: string;
+  summary: string;
 }) {
   return (
-    <div className="panel-card flex flex-col h-full z-20 pointer-events-auto">
+    <div 
+      className="panel-card flex flex-col h-full z-20 pointer-events-auto"
+      style={{
+        '--panel-glow': `${color}30`,
+        '--panel-glow-inset': `${color}10`,
+        borderColor: `${color}40`,
+      } as any}
+    >
       <div className="flex items-center gap-2 mb-3">
-        <Target className="text-white" size={16} />
-        <h3 className="font-sans font-semibold text-[15px] text-white tracking-wide">Focus Signal</h3>
+        <Target className="text-white" size={18} />
+        <h3 className="font-sans font-bold text-[16px] text-white tracking-wide">Focus Signal</h3>
       </div>
-      <p className="text-[13px] text-muted-foreground mb-6 leading-relaxed">
-        Your attention is strongly pulled toward action and immediate delivery. Consider focusing on the highest urgency items.
+      <p className="text-[13px] text-white/60 mb-6 leading-relaxed">
+        {summary}
       </p>
       
-      <div className="flex flex-col gap-5 mt-auto">
-         {topPriorities.map((p, i) => (
+      <div data-testid="focus-signal-list" className="focus-signal-list flex flex-col gap-1 mt-auto">
+         {rankedPriorities.map((p, i) => (
            <div key={p.id} className="flex items-center gap-3 group w-full">
-            <span className="text-muted-foreground text-[11px] font-display w-3 text-left">{i + 1}</span>
-            <div className="w-2.5 h-2.5 rounded-full shadow-[0_0_8px_var(--c)]" style={{ '--c': p.hue, backgroundColor: p.hue } as any} />
+            <span className="text-white/40 text-[11px] font-display w-3 text-left font-bold">{i + 1}</span>
+            <div className="w-3 h-3 rounded-full shadow-[0_0_8px_var(--c)]" style={{ '--c': p.hue, backgroundColor: p.hue } as any} />
              <input
                key={p.name}
                defaultValue={p.name}
@@ -295,12 +784,12 @@ function FocusSignalPanel({
                onKeyDown={(event) => {
                  if (event.key === 'Enter') event.currentTarget.blur();
                }}
-               className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-1 -ml-1 text-[13px] font-medium text-muted-foreground outline-none transition-colors hover:border-white/10 hover:text-white focus:border-primary/40 focus:bg-white/5 focus:text-white"
+               className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-1 -ml-1 text-[13px] font-semibold text-white/80 outline-none transition-colors hover:border-white/10 hover:text-white focus:border-white/20 focus:bg-white/5 focus:text-white"
              />
-            <div className="w-20 lg:w-24 h-1.5 bg-white/10 rounded-full overflow-hidden flex-shrink-0">
-               <div className="h-full rounded-full" style={{ width: `${getFocusScore(p)}%`, backgroundColor: p.hue, boxShadow: `0 0 8px ${p.hue}` }} />
+            <div className="w-16 lg:w-20 h-[6px] bg-white/10 rounded-full overflow-hidden flex-shrink-0">
+               <div className="h-full rounded-full" style={{ width: `${getFocusScore(p)}%`, backgroundColor: p.hue, boxShadow: `0 0 10px ${p.hue}` }} />
             </div>
-            <span className="text-[13px] font-display font-bold w-6 text-right text-white">{getFocusScore(p)}</span>
+            <span className="text-[13px] font-sans font-bold w-6 text-right text-white">{getFocusScore(p)}</span>
            </div>
         ))}
       </div>
@@ -308,24 +797,90 @@ function FocusSignalPanel({
   );
 }
 
+function useDialogFocus<T extends HTMLElement>(onClose: () => void) {
+  const dialogRef = useRef<T>(null);
+  const openerRef = useRef<HTMLElement | null>(
+    typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+  );
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    const opener = openerRef.current;
+    if (!dialog) return;
+
+    const getFocusable = () => Array.from(dialog.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"]):not([disabled])'
+    ));
+
+    if (!dialog.contains(document.activeElement)) {
+      (getFocusable()[0] || dialog).focus();
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const activeDialog = document.activeElement instanceof HTMLElement
+        ? document.activeElement.closest('[role="dialog"]')
+        : null;
+      if (activeDialog && activeDialog !== dialog) return;
+      if (!dialog.contains(document.activeElement)) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+
+      const focusable = getFocusable();
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+
+      const current = document.activeElement;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!dialog.contains(current)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && current === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && current === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      requestAnimationFrame(() => {
+        if (opener?.isConnected && !document.querySelector('[role="dialog"]')) opener.focus();
+      });
+    };
+  }, []);
+
+  return dialogRef;
+}
+
 function ManageTasksDialog({
   priorities,
   onClose,
   onSelect,
   onRename,
+  onRemove,
 }: {
   priorities: Priority[];
   onClose: () => void;
   onSelect: (id: string) => void;
   onRename: (id: string, name: string) => void;
+  onRemove: (id: string) => void;
 }) {
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  const dialogRef = useDialogFocus<HTMLDivElement>(onClose);
 
   return (
     <motion.div
@@ -339,7 +894,9 @@ function ManageTasksDialog({
     >
       <motion.div
         className="add-dialog w-full max-w-md"
+        ref={dialogRef}
         role="dialog"
+        tabIndex={-1}
         aria-modal="true"
         aria-labelledby="manage-tasks-title"
         initial={{ scale: 0.96, y: 12, opacity: 0 }}
@@ -348,11 +905,11 @@ function ManageTasksDialog({
       >
         <div className="flex items-start justify-between gap-4 mb-5">
           <div>
-            <h2 id="manage-tasks-title" className="font-display text-xl font-semibold text-white tracking-wide">Manage priorities</h2>
-            <p className="text-muted-foreground text-xs mt-1.5">Rename any pre-listed or added planet.</p>
+            <h2 id="manage-tasks-title" className="font-display text-xl font-bold text-white tracking-wide">Manage priorities</h2>
+            <p className="text-white/60 text-xs mt-1.5 font-medium">Rename, select, or remove priorities here. Adjust metrics from Planet Detail.</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close dialog" className="w-7 h-7 rounded-full bg-white/5 border border-white/10 text-muted-foreground flex items-center justify-center hover:text-white">
-            <X size={14} />
+          <button type="button" onClick={onClose} aria-label="Close dialog" className="w-8 h-8 rounded-full bg-white/5 border border-white/10 text-white/60 flex items-center justify-center hover:text-white hover:bg-white/10 transition-colors">
+            <X size={16} />
           </button>
         </div>
         <div className="flex flex-col gap-2 max-h-[55vh] overflow-y-auto pr-1">
@@ -372,7 +929,7 @@ function ManageTasksDialog({
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') event.currentTarget.blur();
                 }}
-                className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none focus:border-primary/60"
+                className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm font-semibold text-white outline-none focus:border-primary/60 transition-colors"
               />
               <button
                 type="button"
@@ -380,9 +937,21 @@ function ManageTasksDialog({
                   onSelect(priority.id);
                   onClose();
                 }}
-                className="px-3 py-2 rounded-lg border border-white/10 text-[11px] text-muted-foreground hover:bg-white/10 hover:text-white"
+                aria-label={`Select ${priority.name}`}
+                className="px-3 py-2 rounded-lg border border-white/10 text-[11px] font-bold text-white/60 hover:bg-white/10 hover:text-white transition-colors"
               >
-                Tune
+                Select
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm(`Remove ${priority.name} from orbit?`)) onRemove(priority.id);
+                }}
+                aria-label={`Remove ${priority.name}`}
+                title="Remove priority"
+                className="h-9 w-9 shrink-0 rounded-lg border border-white/10 text-white/40 flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 transition-colors"
+              >
+                <Trash2 size={15} aria-hidden="true" />
               </button>
             </div>
           ))}
@@ -392,22 +961,31 @@ function ManageTasksDialog({
   );
 }
 
-function InsightPanel({ insight, priority }: { insight: string, priority?: Priority }) {
+function InsightPanel({ insight, title, priority }: { insight: string, title: string, priority?: Priority }) {
+  const color = priority?.hue || '#9b5be4';
+  
   return (
-    <div className="panel-card flex flex-col items-center justify-center text-center relative overflow-hidden min-h-[240px] z-20 pointer-events-auto">
+    <div 
+      className="panel-card flex flex-col items-center justify-center text-center relative overflow-hidden min-h-[240px] z-20 pointer-events-auto"
+      style={{
+        '--panel-glow': `${color}30`,
+        '--panel-glow-inset': `${color}10`,
+        borderColor: `${color}40`,
+      } as any}
+    >
       {priority && (
-         <div className="absolute inset-0 opacity-15 pointer-events-none transition-colors duration-700" style={{ background: `radial-gradient(circle at 50% 0%, ${priority.hue}, transparent 70%)` }} />
+         <div className="absolute inset-0 opacity-20 pointer-events-none transition-colors duration-700" style={{ background: `radial-gradient(circle at 50% -20%, ${priority.hue}, transparent 70%)` }} />
       )}
       
-      <div className="w-12 h-12 rounded-full border border-white/10 bg-white/5 flex items-center justify-center mb-5 z-10 transition-colors duration-500" style={{ boxShadow: priority ? `0 0 20px ${priority.hue}40` : 'none' }}>
-        <Orbit size={20} className={priority ? "text-white" : "text-muted-foreground"} style={{ color: priority?.hue }} />
+      <div className="w-12 h-12 rounded-full border border-white/20 bg-white/5 flex items-center justify-center mb-4 z-10 transition-colors duration-500" style={{ boxShadow: priority ? `0 0 25px ${priority.hue}60` : 'none' }}>
+        <Activity size={20} className={priority ? "text-white" : "text-white/60"} style={{ color: priority?.hue }} />
       </div>
       
-      <h3 className="font-sans font-semibold text-base mb-3 text-white z-10 tracking-wide">
-        {priority ? "You're pulled toward action." : "Field is open."}
+      <h3 className="font-sans font-bold text-[16px] mb-2 text-white z-10 tracking-wide">
+        {title}
       </h3>
       
-      <p className="text-[13px] text-muted-foreground leading-relaxed max-w-[260px] z-10">
+      <p className="text-[13px] text-white/60 leading-relaxed max-w-[280px] z-10 font-medium">
         {insight}
       </p>
       
@@ -420,15 +998,15 @@ function SelectedPanel({
   onUpdate,
   onRename,
   onComplete,
-  onRemove,
   onClose,
+  onRemove,
 }: {
   priority?: Priority;
   onUpdate: (metric: MetricKey, val: number) => void;
   onRename: (name: string) => void;
   onComplete: () => void;
-  onRemove: () => void;
   onClose: () => void;
+  onRemove: () => void;
 }) {
   const [name, setName] = useState(priority?.name ?? '');
 
@@ -437,8 +1015,7 @@ function SelectedPanel({
   }, [priority?.id, priority?.name]);
 
   if (!priority) return (
-     <div className="panel-card flex flex-col justify-center items-center text-center z-20 pointer-events-auto min-h-[240px]">
-       <p className="text-muted-foreground text-[13px]">Select a body to tune its orbit.</p>
+     <div className="panel-card flex flex-col justify-center items-center text-center z-20 pointer-events-auto min-h-[240px] opacity-0 pointer-events-none w-0 h-0 p-0 m-0">
      </div>
   );
   
@@ -453,16 +1030,23 @@ function SelectedPanel({
 
   return (
     <form
-      className="panel-card flex flex-col relative overflow-hidden h-full z-20 pointer-events-auto"
+      className="selected-panel-card panel-card flex flex-col relative overflow-hidden h-full z-20 pointer-events-auto"
       onSubmit={(event) => {
         event.preventDefault();
         saveName();
       }}
+      style={{
+        '--panel-glow': `${priority.hue}40`,
+        '--panel-glow-inset': `${priority.hue}15`,
+        borderColor: `${priority.hue}50`,
+      } as any}
     >
-      <div className="flex justify-between items-start mb-6">
+      <div className="flex justify-between items-start mb-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full shadow-[0_0_15px_var(--c)]" style={{ '--c': priority.hue, background: `radial-gradient(circle at 35% 35%, #fff 0%, ${priority.hue} 50%, #000 90%)` } as any} />
-          <div>
+          <div className="w-12 h-12 rounded-full shadow-[0_0_20px_var(--c)] relative shrink-0" style={{ '--c': priority.hue, background: `radial-gradient(circle at 35% 35%, #fff 0%, ${priority.hue} 50%, #000 90%)` } as any}>
+            <div className="absolute inset-0 rounded-full shadow-[inset_0_0_10px_rgba(255,255,255,0.5)] pointer-events-none"></div>
+          </div>
+          <div className="flex flex-col justify-center min-w-0">
              <label htmlFor="selected-priority-name" className="sr-only">Planet name</label>
              <input
                id="selected-priority-name"
@@ -470,40 +1054,86 @@ function SelectedPanel({
                onChange={(event) => setName(event.target.value)}
                onBlur={saveName}
                maxLength={40}
-               className="w-full min-w-0 max-w-[180px] rounded-md border border-transparent bg-transparent px-1 py-1 -ml-1 font-sans font-semibold text-[15px] leading-none text-white tracking-wide outline-none transition-colors hover:border-white/10 hover:bg-white/5 focus:border-primary/50 focus:bg-white/10"
+               className="w-full min-w-0 max-w-[180px] rounded-md border border-transparent bg-transparent px-1 py-1 -ml-1 font-sans font-bold text-[17px] leading-none text-white tracking-wide outline-none transition-colors hover:border-white/10 hover:bg-white/5 focus:border-white/20 focus:bg-white/10"
              />
-            <span className="text-[9px] text-primary uppercase tracking-widest font-display font-semibold">
-               {getFocusScore(priority) > 75 ? 'High Focus' : 'In Orbit'}
+            <span className="text-[10px] uppercase tracking-widest font-display font-bold mt-1 px-1" style={{ color: priority.hue }}>
+               {getFocusScore(priority) > 75 ? 'HIGH FOCUS' : 'IN ORBIT'} • SCORE {getFocusScore(priority)}
             </span>
           </div>
         </div>
-        <button type="button" onClick={onClose} className="text-muted-foreground hover:text-white transition-colors" aria-label="Close panel">
-           <X size={16} />
+        <button type="button" onClick={onClose} className="text-white/40 hover:text-white transition-colors p-1" aria-label="Close panel">
+           <X size={18} />
+        </button>
+      </div>
+
+      {/* Quick Presets */}
+      <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+        <span className="text-[9px] uppercase tracking-widest text-white/40 font-bold mr-0.5">Presets:</span>
+        <button
+          type="button"
+          onClick={() => { onUpdate('importance', 9); onUpdate('urgency', 9); onUpdate('energy', 7); }}
+          className="px-2 py-0.5 rounded-md bg-white/5 hover:bg-white/15 border border-white/10 text-[10px] font-bold text-red-300 transition-colors"
+          title="Importance 9, Urgency 9, Effort 7"
+        >
+          ⚡ Fire
+        </button>
+        <button
+          type="button"
+          onClick={() => { onUpdate('importance', 9); onUpdate('urgency', 4); onUpdate('energy', 8); }}
+          className="px-2 py-0.5 rounded-md bg-white/5 hover:bg-white/15 border border-white/10 text-[10px] font-bold text-purple-300 transition-colors"
+          title="Importance 9, Urgency 4, Effort 8"
+        >
+          🌱 Deep
+        </button>
+        <button
+          type="button"
+          onClick={() => { onUpdate('importance', 6); onUpdate('urgency', 8); onUpdate('energy', 3); }}
+          className="px-2 py-0.5 rounded-md bg-white/5 hover:bg-white/15 border border-white/10 text-[10px] font-bold text-emerald-300 transition-colors"
+          title="Importance 6, Urgency 8, Effort 3"
+        >
+          🎯 Win
+        </button>
+        <button
+          type="button"
+          onClick={() => { onUpdate('importance', 7); onUpdate('urgency', 5); onUpdate('energy', 4); }}
+          className="px-2 py-0.5 rounded-md bg-white/5 hover:bg-white/15 border border-white/10 text-[10px] font-bold text-blue-300 transition-colors"
+          title="Importance 7, Urgency 5, Effort 4"
+        >
+          🛡️ Habit
         </button>
       </div>
       
-      <div className="flex flex-col gap-5 mt-auto">
+      <div className="flex flex-col gap-4">
          <RangeControl label="Importance" value={priority.importance} color={priority.hue} onChange={(v) => onUpdate('importance', v)} />
          <RangeControl label="Urgency" value={priority.urgency} color={priority.hue} onChange={(v) => onUpdate('urgency', v)} />
          <RangeControl label="Energy / Effort" value={priority.energy} color={priority.hue} onChange={(v) => onUpdate('energy', v)} />
       </div>
       
-      <div className="flex items-center gap-3 mt-6">
-        <button type="button" onClick={() => { if(window.confirm('Remove this priority?')) onRemove() }} aria-label="Delete priority" className="w-10 h-10 rounded-xl border border-white/10 text-muted-foreground flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 transition-colors">
+      <div className="flex items-center gap-3 mt-4">
+        <button type="button" onClick={() => { if(window.confirm(`Remove ${priority.name} from orbit?`)) onRemove() }} aria-label="Delete priority" className="w-10 h-10 rounded-xl border border-white/10 bg-white/5 text-white/40 flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 transition-colors">
           <Trash2 size={16} />
         </button>
-         <button type="submit" className="flex-1 h-10 rounded-xl border border-white/10 bg-white/5 text-[12px] font-medium text-white hover:bg-white/10 transition-colors">
-          Save Changes
+        <button type="submit" className="flex-1 h-10 rounded-xl border border-white/10 bg-white/5 text-[13px] font-bold text-white hover:bg-white/10 transition-colors">
+          Save Name
+        </button>
+        <button
+          type="button"
+          onClick={onComplete}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ' || event.key === 'Space' || event.key === 'Spacebar') {
+              event.preventDefault();
+              onComplete();
+            }
+          }}
+          aria-label="Complete task"
+          title="Complete task"
+          className="complete-task-corner flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-400/15 px-3 text-[13px] font-bold text-emerald-300 transition-all hover:scale-[1.01] hover:border-emerald-300/80 hover:bg-emerald-400/30 hover:text-emerald-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70"
+        >
+          <CheckCircle2 size={17} aria-hidden="true" />
+          <span>Complete Task</span>
         </button>
       </div>
-       <button
-         type="button"
-         onClick={onComplete}
-         className="mt-3 h-10 w-full rounded-xl border border-emerald-400/30 bg-emerald-400/10 text-[12px] font-semibold text-emerald-200 hover:border-emerald-300/60 hover:bg-emerald-400/20 transition-colors flex items-center justify-center gap-2"
-       >
-         <Check size={15} /> Complete Task
-       </button>
-    </form>
+   </form>
   );
 }
 
@@ -515,14 +1145,7 @@ function AddPriorityDialog({
   onCreate: (name: string) => void;
 }) {
   const [name, setName] = useState('');
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  const dialogRef = useDialogFocus<HTMLFormElement>(onClose);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -545,7 +1168,9 @@ function AddPriorityDialog({
       <motion.form 
         className="add-dialog" 
         onSubmit={submit} 
+        ref={dialogRef}
         role="dialog" 
+        tabIndex={-1}
         aria-modal="true"
         aria-labelledby="add-priority-title"
         initial={{ scale: 0.95, y: 15, opacity: 0 }}
@@ -555,27 +1180,27 @@ function AddPriorityDialog({
       >
         <div className="flex justify-between gap-5 mb-6">
           <div>
-            <h2 id="add-priority-title" className="font-display text-xl font-semibold m-0 text-white tracking-wide">New body</h2>
-            <p className="text-muted-foreground text-xs mt-1.5">Give the next thing a place in your sky.</p>
+            <h2 id="add-priority-title" className="font-display text-xl font-bold m-0 text-white tracking-wide">New celestial body</h2>
+            <p className="text-white/60 text-xs mt-1.5 font-medium">Give the next thing a place in your sky.</p>
           </div>
           <motion.button 
             type="button" 
             aria-label="Close dialog"
-            className="w-7 h-7 rounded-full bg-white/5 border border-white/10 text-muted-foreground flex items-center justify-center hover:text-white transition-colors self-start" 
+            className="w-8 h-8 rounded-full bg-white/5 border border-white/10 text-white/60 flex items-center justify-center hover:text-white hover:bg-white/10 transition-colors self-start" 
             onClick={onClose} 
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
           >
-            <X size={14} />
+            <X size={16} />
           </motion.button>
         </div>
-        <label className="block text-white/80 text-[11px] uppercase tracking-wider font-semibold">
+        <label className="block text-white/60 text-[11px] uppercase tracking-widest font-bold">
           Priority name
           <input
             className="name-input"
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="e.g. Write the proposal"
+            placeholder="e.g. Launch product beta"
             autoFocus
             maxLength={42}
           />
@@ -583,7 +1208,7 @@ function AddPriorityDialog({
         <div className="flex justify-end gap-3 mt-8">
           <motion.button 
             type="button" 
-            className="px-5 py-2.5 rounded-full border border-white/10 text-muted-foreground text-xs font-medium hover:bg-white/5 transition-colors" 
+            className="px-5 py-2.5 rounded-full border border-white/10 text-white/60 text-xs font-bold hover:bg-white/10 hover:text-white transition-colors" 
             onClick={onClose} 
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -606,18 +1231,19 @@ function AddPriorityDialog({
 }
 
 const Particles = memo(function Particles() {
-  const particles = useMemo(() => Array.from({ length: 120 }).map((_, i) => ({
+  const particles = useMemo(() => Array.from({ length: 150 }).map((_, i) => ({
     id: i,
-    size: Math.random() * 2 + 0.5,
+    size: Math.random() * 2.5 + 0.5,
     left: `${Math.random() * 100}%`,
     top: `${Math.random() * 100}%`,
-    dur: Math.random() * 5 + 3,
+    dur: Math.random() * 6 + 4,
     delay: Math.random() * -10,
-    opacity: Math.random() * 0.6 + 0.1,
+    opacity: Math.random() * 0.7 + 0.2,
+    color: Math.random() > 0.8 ? (Math.random() > 0.5 ? '#ffccff' : '#ccddff') : '#ffffff'
   })), []);
 
   return (
-    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+    <div className="cosmos-particles absolute inset-0 pointer-events-none overflow-hidden z-0">
       {particles.map((p) => (
         <div
           key={p.id}
@@ -627,6 +1253,8 @@ const Particles = memo(function Particles() {
             height: p.size,
             left: p.left,
             top: p.top,
+            backgroundColor: p.color,
+            boxShadow: `0 0 ${p.size * 2}px ${p.color}`,
             '--twinkle-dur': `${p.dur}s`,
             animationDelay: `${p.delay}s`,
             '--max-opacity': p.opacity,
@@ -637,6 +1265,42 @@ const Particles = memo(function Particles() {
   );
 });
 
+function OrbitRings({ priorities }: { priorities: Priority[] }) {
+  return (
+    <>
+      {priorities.map(p => (
+        <OrbitRing key={`ring-${p.id}`} priority={p} />
+      ))}
+    </>
+  );
+}
+
+function OrbitRing({ priority }: { priority: Priority }) {
+  const urgencySpring = useSpring(priority.urgency, { stiffness: 50, damping: 15 });
+
+  useEffect(() => {
+    urgencySpring.set(priority.urgency);
+  }, [priority.urgency, urgencySpring]);
+
+  const size = useTransform(() => `${(18 + (10 - urgencySpring.get()) * 2.9) * 2}%`);
+  
+  return (
+    <motion.div
+      className="orbit-track absolute left-1/2 top-1/2 pointer-events-none"
+      style={{
+        x: '-50%',
+        y: '-50%',
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        border: `1.5px solid ${priority.hue}28`,
+        boxShadow: `0 0 14px ${priority.hue}12`,
+        zIndex: 0
+      }}
+    />
+  );
+}
+
 function SelectedOrbitRing({ priority }: { priority: Priority }) {
   const urgencySpring = useSpring(priority.urgency, { stiffness: 50, damping: 15 });
   
@@ -644,26 +1308,25 @@ function SelectedOrbitRing({ priority }: { priority: Priority }) {
     urgencySpring.set(priority.urgency);
   }, [priority.urgency, urgencySpring]);
   
-  const size = useTransform(() => `${(24 + (10 - urgencySpring.get()) * 2.8) * 2}%`);
-  const sizeSquished = useTransform(() => `${(24 + (10 - urgencySpring.get()) * 2.8) * 2 * 0.82}%`);
+  const size = useTransform(() => `${(18 + (10 - urgencySpring.get()) * 2.9) * 2}%`);
   
   return (
     <motion.div
-      className="absolute left-1/2 top-1/2 rounded-full pointer-events-none z-0"
+      className="orbit-track orbit-track-selected absolute left-1/2 top-1/2 pointer-events-none z-0"
       style={{
         x: '-50%',
         y: '-50%',
         width: size,
-        height: sizeSquished,
-        border: '1.5px dashed var(--borderColor)',
+        height: size,
+        borderRadius: '50%',
+        border: '2px solid var(--borderColor)',
         boxShadow: '0 0 25px var(--borderColor) inset, 0 0 25px var(--borderColor)',
-        opacity: 0.4,
         '--borderColor': priority.hue,
       } as any}
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 0.4, scale: 1 }}
-      exit={{ opacity: 0, scale: 1.05 }}
-      transition={{ duration: 0.6, ease: "easeOut" }}
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={{ opacity: 0.9, scale: 1 }}
+      exit={{ opacity: 0, scale: 1.04 }}
+      transition={{ duration: 0.5, ease: "easeOut" }}
     />
   );
 }
@@ -671,14 +1334,14 @@ function SelectedOrbitRing({ priority }: { priority: Priority }) {
 function OrbComponent({ 
   priority, 
   index, 
-  selectedId, 
+  selectedId,
   onSelect,
   isCompleting,
   prefersReducedMotion 
 }: { 
   priority: Priority; 
   index: number; 
-  selectedId: string | null; 
+  selectedId: string | null;
   onSelect: (id: string) => void;
   isCompleting: boolean;
   prefersReducedMotion: boolean;
@@ -686,20 +1349,18 @@ function OrbComponent({
   const isSelected = selectedId === priority.id;
   const isUnrelated = selectedId !== null && !isSelected;
   const score = getFocusScore(priority);
-  
-  const drift = useMotionValue(0);
-  
+  const [isHovered, setIsHovered] = useState(false);
+  const [hitLayer, setHitLayer] = useState<HTMLElement | null>(null);
+
   useEffect(() => {
-    if (prefersReducedMotion) return;
-    const controls = animate(drift, Math.PI * 2, {
-      duration: 180 + index * 30,
-      repeat: Infinity,
-      ease: "linear"
-    });
-    return controls.stop;
-  }, [prefersReducedMotion, index, drift]);
+    setHitLayer(document.getElementById('orb-hit-layer'));
+  }, []);
   
-  const baseAngle = (orbitAngles[index % orbitAngles.length] * Math.PI) / 180;
+  const baseAngle = useMemo(() => getPlanetBaseAngle(priority.id), [priority.id]);
+  const drift = useMotionValue(0);
+  const planetRef = useRef<HTMLDivElement>(null);
+  const hitX = useMotionValue(0);
+  const hitY = useMotionValue(0);
   
   const urgencySpring = useSpring(priority.urgency, { stiffness: 50, damping: 15 });
   const importanceSpring = useSpring(priority.importance, { stiffness: 50, damping: 15 });
@@ -708,429 +1369,698 @@ function OrbComponent({
     urgencySpring.set(priority.urgency);
     importanceSpring.set(priority.importance);
   }, [priority.urgency, priority.importance, urgencySpring, importanceSpring]);
-  
+
+  // Continuous physics loop: accumulated delta time guarantees zero snapping or resets
+  useEffect(() => {
+    if (prefersReducedMotion) return;
+    let lastTime = performance.now();
+    let animId: number;
+    const tick = (now: number) => {
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
+      // Gentle slowdown on hover or selection for effortless clicking and reading
+      const speedMult = isHovered ? 0.15 : isSelected ? 0.35 : 1.0;
+      // Keplerian orbit: inner orbits rotate faster (48s to 120s)
+      const period = 48 + (10 - urgencySpring.get()) * 8;
+      const angularSpeed = (2 * Math.PI) / period;
+      drift.set(drift.get() + angularSpeed * dt * speedMult);
+      animId = requestAnimationFrame(tick);
+    };
+    animId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(animId);
+  }, [prefersReducedMotion, isHovered, isSelected, urgencySpring, drift]);
+
+  useEffect(() => {
+    let frame = 0;
+    const syncHitArea = () => {
+      const rect = planetRef.current?.getBoundingClientRect();
+      if (rect) {
+        hitX.set(rect.left + rect.width / 2);
+        hitY.set(rect.top + rect.height / 2);
+      }
+      frame = requestAnimationFrame(syncHitArea);
+    };
+    frame = requestAnimationFrame(syncHitArea);
+    return () => cancelAnimationFrame(frame);
+  }, [hitX, hitY]);
+
+  // True 3D coordinate inside the tilted orbital plane:
+  // Since the plane itself is tilted (rotateX 56deg, rotateZ -10deg),
+  // placing bodies at (cos θ * R, sin θ * R) guarantees they ride EXACTLY on the ring!
   const x = useTransform(() => {
-    const d = drift.get();
-    const u = urgencySpring.get();
-    const angle = baseAngle + d;
-    const radius = 24 + (10 - u) * 2.8;
+    const angle = baseAngle + drift.get();
+    const radius = 18 + (10 - urgencySpring.get()) * 2.9;
     return `${50 + Math.cos(angle) * radius}%`;
   });
   
   const y = useTransform(() => {
-    const d = drift.get();
-    const u = urgencySpring.get();
-    const angle = baseAngle + d;
-    const radius = 24 + (10 - u) * 2.8;
-    return `${50 + Math.sin(angle) * radius * 0.82}%`;
+    const angle = baseAngle + drift.get();
+    const radius = 18 + (10 - urgencySpring.get()) * 2.9;
+    return `${50 + Math.sin(angle) * radius}%`;
+  });
+
+  // Continuous depth keeps overlapping planets ordered by their orbital phase.
+  const depthZIndex = useTransform(() => {
+    if (isSelected) return 35;
+    const sinVal = Math.sin(baseAngle + drift.get());
+    return Math.round(10 + sinVal * 9);
+  });
+
+  const depthScale = useTransform(() => {
+    const sinVal = Math.sin(baseAngle + drift.get());
+    return 0.90 + sinVal * 0.14; // subtle scale modulation with depth
+  });
+
+  const depthFilter = useTransform(() => {
+    if (isCompleting) return 'none';
+    const sinVal = Math.sin(baseAngle + drift.get());
+    const brightness = (0.90 + sinVal * 0.14).toFixed(2);
+    if (isUnrelated) return `brightness(${Number(brightness) * 0.78}) grayscale(15%)`;
+    return `brightness(${brightness})`;
   });
   
-  const size = useTransform(() => 35 + importanceSpring.get() * 6);
-  
+  const size = useTransform(() => 36 + importanceSpring.get() * 5.5);
+
+  // Gas giant planetary ring for high-energy or specific flagship priorities
+  const hasPlanetaryRing = priority.energy >= 7 || priority.id === 'signalboard' || priority.id === 'job-search';
+
+  const handleScreenClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    if (event.detail > 0) {
+      let nearest: HTMLButtonElement | null = null;
+      let nearestDistance = Infinity;
+      for (const button of document.querySelectorAll<HTMLButtonElement>('.orb-screen-hit')) {
+        const rect = button.getBoundingClientRect();
+        const distance = Math.hypot(
+          event.clientX - (rect.left + rect.width / 2),
+          event.clientY - (rect.top + rect.height / 2),
+        );
+        if (distance < nearestDistance) {
+          nearest = button;
+          nearestDistance = distance;
+        }
+      }
+      if (nearest && nearest !== event.currentTarget) {
+        event.preventDefault();
+        event.stopPropagation();
+        nearest.focus({ preventScroll: true });
+        nearest.dispatchEvent(new window.MouseEvent('click', {
+          bubbles: true,
+          cancelable: true,
+          clientX: event.clientX,
+          clientY: event.clientY,
+          detail: event.detail,
+          view: window,
+        }));
+        return;
+      }
+    }
+    onSelect(priority.id);
+  };
+
   return (
     <motion.div
-      style={{ left: x, top: y, position: 'absolute', x: '-50%', y: '-50%', zIndex: isSelected ? 10 : isUnrelated ? 1 : 2 }}
+      className="orb-hit-container"
+      style={{
+        left: x,
+        top: y,
+        position: 'absolute',
+        x: '-50%',
+        y: '-50%',
+        transformStyle: 'preserve-3d',
+        zIndex: depthZIndex,
+        scale: depthScale,
+        filter: depthFilter,
+      }}
       initial={{ scale: 0, opacity: 0 }}
       animate={{ 
-        scale: isCompleting ? [1, 1.35, 0.15] : 1,
-        opacity: isUnrelated ? 0.35 : 1,
-        filter: isCompleting
-          ? ['brightness(1)', 'brightness(3) drop-shadow(0 0 28px white)', 'brightness(5) blur(2px)']
-          : isUnrelated ? 'blur(1px) saturate(0.6)' : 'blur(0px) saturate(1)'
+        opacity: isUnrelated ? 0.72 : 1,
       }}
-      exit={{ scale: 0, opacity: 0, filter: 'brightness(4) blur(4px)' }}
-      transition={isCompleting ? { duration: 0.85, times: [0, 0.45, 1], ease: 'easeInOut' } : { type: "spring", damping: 20, stiffness: 250 }}
+      transition={{ type: 'spring', damping: 25, stiffness: 200 }}
     >
-      <motion.div
-        className={`orb-wrapper ${isSelected ? 'selected' : ''}`}
-        onClick={(e) => { e.stopPropagation(); onSelect(priority.id); }}
-        whileHover={{ scale: 1.08 }}
-        whileTap={{ scale: 0.95 }}
-      >
-        <div className="orb-badge">{score}</div>
-        
+      {/* Supernova Completion Burst */}
+      {isCompleting && (
+        <>
+          <div className="supernova-burst" style={{ '--burst-color': priority.hue } as any} />
+          <div className="supernova-shockwave" style={{ '--burst-color': priority.hue } as any} />
+        </>
+      )}
+
+      <div className="orb-billboard" aria-hidden="true">
         <motion.div
-           className="orb-planet"
-           style={{
-             width: size,
-             height: size,
-             '--orb-color': priority.hue,
-           } as any}
-           animate={{ scale: [1, 1.02 + priority.energy * 0.01, 1] }}
-           transition={{
-              scale: {
-                 duration: prefersReducedMotion ? 0 : 8.5 - priority.energy * 0.45,
-                 repeat: Infinity,
-                 ease: "easeInOut",
-                 delay: index * -0.8
-              }
-           }}
+          ref={planetRef}
+          className="orb-anchor"
+          style={{ width: size, height: size }}
         />
-        
-        <div className="orb-label">
-          <div className="orb-name">{priority.name}</div>
-          <div className="orb-sub">FOCUS</div>
-        </div>
-      </motion.div>
+      </div>
+      {hitLayer && createPortal(
+        <motion.div
+          className="orb-screen-visual"
+          data-priority-id={priority.id}
+          aria-hidden="true"
+          style={{
+            left: hitX,
+            top: hitY,
+            width: size,
+            height: size,
+            x: '-50%',
+            y: '-50%',
+            zIndex: depthZIndex,
+            scale: depthScale,
+            filter: depthFilter,
+          }}
+          animate={{ opacity: isUnrelated ? 0.72 : 1 }}
+          transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+        >
+          <motion.div
+            className={`orb-wrapper ${isSelected ? 'selected' : ''}`}
+            style={{ '--orb-color': priority.hue } as CSSProperties}
+            animate={{ scale: isHovered && !isCompleting ? 1.08 : 1 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+          >
+            <div className="relative">
+              <div className="absolute -top-3 -right-3 px-2 py-0.5 rounded-full text-[10px] font-bold font-display z-20 text-white backdrop-blur-md" style={{
+                backgroundColor: 'rgba(0,0,0,0.65)',
+                border: `1px solid ${priority.hue}70`,
+                boxShadow: `0 0 10px ${priority.hue}40`,
+              }}>
+                {score}
+              </div>
+
+              {hasPlanetaryRing && <div className="orb-planet-ring" />}
+
+              <motion.div
+                className="orb-planet"
+                style={{
+                  width: size,
+                  height: size,
+                } as any}
+              />
+            </div>
+            <div className="orb-label mt-2 pointer-events-none">
+              <span className="orb-name block text-[13px] font-sans font-bold text-white tracking-wide">{priority.name}</span>
+              <span className="orb-sub block text-[9px] font-display font-bold tracking-widest mt-0.5" style={{ color: `${priority.hue}` }}>
+                {getSubLabel(priority.name)}
+              </span>
+            </div>
+          </motion.div>
+        </motion.div>,
+        hitLayer,
+      )}
+      {hitLayer && createPortal(
+        <motion.button
+          type="button"
+          className="orb-screen-hit"
+          aria-label={`Select ${priority.name}`}
+          aria-pressed={isSelected}
+          data-testid={`orb-${priority.id}`}
+          style={{ left: hitX, top: hitY, zIndex: depthZIndex }}
+          onClick={handleScreenClick}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              onSelect(priority.id);
+            }
+          }}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+          onFocus={() => setIsHovered(true)}
+          onBlur={() => setIsHovered(false)}
+        />,
+        hitLayer,
+      )}
     </motion.div>
   );
 }
 
-function GalaxyStage({
-  priorities,
-  selectedId,
-  completingId,
-  onSelect,
-  onAdd,
-  urgencyTrigger,
-  mouseX, mouseY,
-  prefersReducedMotion
+function LivingCore({
+  topPriorities,
+  totalPriorities,
+  onSelectTop,
 }: {
-  priorities: Priority[];
-  selectedId: string | null;
-  completingId: string | null;
-  onSelect: (id: string) => void;
-  onAdd: () => void;
-  urgencyTrigger: number;
-  mouseX: any; mouseY: any;
-  prefersReducedMotion: boolean;
+  topPriorities: Priority[];
+  totalPriorities: number;
+  onSelectTop: () => void;
 }) {
-  const springConfig = { damping: 40, stiffness: 80, mass: 1 };
-  const orbitX = useSpring(useTransform(mouseX, [-0.5, 0.5], prefersReducedMotion ? [0, 0] : [-15, 15]), springConfig);
-  const orbitY = useSpring(useTransform(mouseY, [-0.5, 0.5], prefersReducedMotion ? [0, 0] : [-15, 15]), springConfig);
-
-  const selectedPriority = priorities.find(p => p.id === selectedId);
+  const [isHovered, setIsHovered] = useState(false);
+  const lead = topPriorities[0];
+  const equilibrium = useMemo(() => {
+    if (totalPriorities === 0) return 100;
+    const avgScore = topPriorities.reduce((sum, p) => sum + getFocusScore(p), 0) / topPriorities.length;
+    return Math.max(10, Math.min(100, Math.round(100 - Math.abs(avgScore - 70))));
+  }, [topPriorities, totalPriorities]);
 
   return (
-    <motion.div 
-      className="orbit-stage w-full h-full absolute inset-0 pointer-events-none" 
+    <motion.div
+      className="core-container w-[132px] h-[132px] md:w-[150px] md:h-[150px] z-10"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onClick={onSelectTop}
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.96 }}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelectTop();
+        }
+      }}
+      aria-label="Center of Gravity: YOU / NOW. Click to focus highest priority."
+      title="YOU / NOW • Center of Gravity (Click to select highest focus)"
     >
-      <AnimatePresence mode="wait">
-        {priorities.length === 0 ? (
-          <motion.div 
-            key="empty"
-            className="absolute inset-0 flex flex-col items-center justify-center text-center z-10 pointer-events-auto"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.4 }}
+      <div className="core-corona" />
+      <div className="core-grav-wave" />
+      <div className="core-grav-wave" />
+      <div className="core-body" />
+      <div className="core-text">
+        <span className="core-title">YOU / NOW</span>
+        <span className="core-subtitle">Center of Gravity</span>
+      </div>
+      <AnimatePresence>
+        {isHovered && (
+          <motion.div
+            className="core-status-badge flex items-center gap-1.5"
+            initial={{ opacity: 0, y: 4, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 4, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
           >
-            <div className="w-32 h-32 border border-dashed border-white/20 rounded-full flex items-center justify-center mb-6 relative">
-              <div className="absolute inset-0 rounded-full bg-primary/10 animate-[core-pulse_4s_ease-in-out_infinite]" />
-              <div className="w-8 h-8 bg-primary/40 rounded-full shadow-[0_0_20px_var(--primary)]" />
-            </div>
-            <h2 className="font-display font-semibold text-2xl text-white mb-3">Your sky is open.</h2>
-            <p className="text-muted-foreground text-sm max-w-sm leading-relaxed mb-8">
-              Nothing is asking for attention yet. Place a priority here and let its orbit take shape.
-            </p>
-            <motion.button 
-              type="button" 
-              className="flex items-center gap-2 px-6 py-3 rounded-full bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors shadow-[0_4px_20px_rgba(155,91,228,0.4)]"
-              onClick={onAdd} 
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <Plus size={16} strokeWidth={2.5} /> Add a priority
-            </motion.button>
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+            <span>Equilibrium {equilibrium}%</span>
+            <span className="text-white/40">•</span>
+            <span>{totalPriorities} {totalPriorities === 1 ? 'Body' : 'Bodies'}</span>
+            {lead && (
+              <>
+                <span className="text-white/40">•</span>
+                <span className="text-amber-300 font-bold">Top: {lead.name}</span>
+              </>
+            )}
           </motion.div>
-        ) : (
-          <div key="galaxy" className="absolute top-[45%] left-1/2 w-[min(100vw,1200px)] h-[min(100vw,1200px)] pointer-events-none" style={{ transform: 'translate(-50%, -50%)' }}>
-            <motion.div 
-              className="w-full h-full pointer-events-auto relative" 
-              onClick={() => onSelect('')} 
-              style={{ x: orbitX, y: orbitY }}
-            >
-              {/* Background dashed rings to form the grid map */}
-            {[25, 45, 65, 85].map(r => (
-               <div 
-                 key={r} 
-                 className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-white/[0.08] pointer-events-none" 
-                 style={{ width: `${r * 2}%`, height: `${r * 2 * 0.7}%` }} 
-               />
-            ))}
-            
-            <AnimatePresence>
-              {selectedPriority && <SelectedOrbitRing key={selectedPriority.id} priority={selectedPriority} />}
-            </AnimatePresence>
-
-            <motion.div 
-              className="absolute left-1/2 top-1/2 flex flex-col items-center justify-center z-10 w-[100px] h-[100px] sm:w-[150px] sm:h-[150px]"
-              style={{ x: '-50%', y: '-50%' }}
-              aria-label="You and now" 
-              onClick={(event) => event.stopPropagation()}
-              whileHover={{ scale: 1.05 }}
-            >
-              <AnimatePresence>
-                {urgencyTrigger > 0 && (
-                  <motion.div
-                    key={`pulse-${urgencyTrigger}`}
-                    className="absolute inset-0 rounded-full border-2 border-primary z-0"
-                    initial={{ scale: 1, opacity: 0.8 }}
-                    animate={{ scale: 3.2, opacity: 0 }}
-                    transition={{ duration: 1.8, ease: "easeOut" }}
-                  />
-                )}
-              </AnimatePresence>
-              <div className="core-glow" />
-              <div className="core-body" />
-              <div className="core-text">
-                <span className="core-title">YOU / NOW</span>
-                <span className="core-subtitle">Center of Gravity</span>
-              </div>
-            </motion.div>
-            
-            <AnimatePresence>
-              {priorities.map((priority, index) => (
-                <OrbComponent 
-                  key={priority.id}
-                  priority={priority}
-                  index={index}
-                  selectedId={selectedId}
-                  isCompleting={completingId === priority.id}
-                  onSelect={onSelect}
-                  prefersReducedMotion={prefersReducedMotion}
-                />
-              ))}
-            </AnimatePresence>
-            </motion.div>
-          </div>
         )}
       </AnimatePresence>
     </motion.div>
   );
 }
 
-function Home() {
+function CosmosBrightnessControl({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="cosmos-brightness-control" title="Adjust Cosmos brightness">
+      <SunMedium size={15} aria-hidden="true" />
+      <label htmlFor="cosmos-brightness" className="sr-only">Cosmos brightness</label>
+      <input
+        id="cosmos-brightness"
+        type="range"
+        min="45"
+        max="130"
+        step="1"
+        value={value}
+        aria-label="Cosmos brightness"
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="cosmos-brightness-range"
+      />
+      <output htmlFor="cosmos-brightness" className="cosmos-brightness-value">{value}%</output>
+    </div>
+  );
+}
+
+function FocusGalaxyContainer() {
   const [priorities, setPriorities] = useState<Priority[]>(readPriorities);
   const [selectedId, setSelectedId] = useState<string | null>(() => readPriorities()[0]?.id ?? null);
-  const [completingId, setCompletingId] = useState<string | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isManageOpen, setIsManageOpen] = useState(false);
   const [panelsOpen, setPanelsOpen] = useState(true);
-  const [urgencyTrigger, setUrgencyTrigger] = useState(0);
-  const [isFormed, setIsFormed] = useState(false);
+  const [isZenMode, setIsZenMode] = useState(false);
+  const [completingId, setCompletingId] = useState<string | null>(null);
+  const [cosmosBrightness, setCosmosBrightness] = useState(100);
+  const { toast } = useToast();
   
-  const { mouseX, mouseY, handleMouseMove, handleMouseLeave } = useParallax();
-  const prefersReducedMotion = useMemo(() => 
-    typeof window !== 'undefined' ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : false
-  , []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setIsFormed(true), 150);
-    return () => clearTimeout(timer);
-  }, []);
+  const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(priorities));
   }, [priorities]);
-
+  
   useEffect(() => {
-    if (selectedId && !priorities.some((priority) => priority.id === selectedId)) setSelectedId(null);
+    if (selectedId && !priorities.some(p => p.id === selectedId)) {
+      setSelectedId(null);
+    }
   }, [priorities, selectedId]);
 
-  const selectedPriority = priorities.find((priority) => priority.id === selectedId);
-  const topPriorities = useMemo(
-    () => [...priorities].sort((a, b) => getFocusScore(b) - getFocusScore(a)).slice(0, 3),
-    [priorities],
-  );
-  
-  const strongest = topPriorities[0];
-  const insight = strongest
-    ? strongest.urgency >= 8
-      ? `${strongest.name} is pulling closest to now. Give it one clear next move before the rest of the sky gets louder.`
-      : strongest.energy >= 8
-        ? `${strongest.name} has high gravity and a high energy cost. Protect a generous, uninterrupted window for it.`
-        : `Your clearest signal is ${strongest.name}. It has the strongest blend of importance and urgency in the field.`
-    : 'A quiet field is still useful. Add one thing when you are ready to decide what deserves your attention.';
-
-  const selectPriority = (id: string) => {
-    setSelectedId(id);
-    setPanelsOpen(true);
-  };
-
-  const updateSelected = (metric: MetricKey, value: number) => {
-    if (!selectedId) return;
-    setPriorities((current) => current.map((priority) => {
-      if (priority.id === selectedId) {
-        if (metric === 'urgency' && priority.urgency !== value) {
-          setUrgencyTrigger(prev => prev + 1);
-        }
-        return { ...priority, [metric]: value };
-      }
-      return priority;
-    }));
-  };
-
-  const renamePriority = (id: string, name: string) => {
-    setPriorities((current) => current.map((priority) =>
-      priority.id === id ? { ...priority, name } : priority
-    ));
-  };
-
-  const renameSelected = (name: string) => {
-    if (selectedId) renamePriority(selectedId, name);
-  };
-
-  const removeSelected = () => {
-    if (!selectedPriority) return;
-    setPriorities((current) => current.filter((priority) => priority.id !== selectedPriority.id));
-    setSelectedId(null);
-  };
-
-  const completeSelected = () => {
-    if (!selectedPriority || completingId) return;
-    const completedId = selectedPriority.id;
-    setCompletingId(completedId);
-    window.setTimeout(() => {
-      setPriorities((current) => current.filter((priority) => priority.id !== completedId));
-      setSelectedId(null);
-      setCompletingId(null);
-    }, prefersReducedMotion ? 150 : 850);
-  };
-
-  const createPriority = (name: string) => {
-    const colors = ['#f04e76', '#3aa2f7', '#f1883b', '#f4c33d', '#9b5be4', '#85d852'];
-    const newPriority: Priority = {
-      id: `${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'priority'}-${Date.now()}`,
+  const addPriority = (name: string) => {
+    const hues = ['#f04e76', '#9b5be4', '#3aa2f7', '#f1883b', '#466bf0', '#85d852', '#f0c04e', '#4ef0c0'];
+    const newP: Priority = {
+      id: crypto.randomUUID(),
       name,
       importance: 5,
       urgency: 5,
       energy: 5,
-      hue: colors[priorities.length % colors.length],
+      hue: hues[priorities.length % hues.length],
     };
-    setPriorities((current) => [...current, newPriority]);
-    setSelectedId(newPriority.id);
+    setPriorities(prev => [...prev, newP]);
     setIsAddOpen(false);
+    setSelectedId(newP.id);
+    playCosmicChime(587.33);
+    toast({
+      title: "✦ New Orbit Established",
+      description: `"${name}" placed in your sky.`,
+    });
   };
 
-  const resetGalaxy = () => {
-    if (window.confirm('Restore the original priorities?')) {
+  const updatePriority = (id: string, metric: MetricKey, val: number) => {
+    setPriorities(prev => prev.map(p => p.id === id ? { ...p, [metric]: val } : p));
+  };
+  
+  const renamePriority = (id: string, name: string) => {
+    setPriorities(prev => prev.map(p => p.id === id ? { ...p, name } : p));
+  };
+
+  const removePriority = (id: string) => {
+    setPriorities(prev => prev.filter(p => p.id !== id));
+    if (selectedId === id) setSelectedId(null);
+  };
+
+  const selectPriority = (id: string) => {
+    setSelectedId(id);
+    setPanelsOpen(true);
+    const p = priorities.find(x => x.id === id);
+    if (p) playCosmicChime(440 + p.urgency * 35);
+  };
+
+  const completePriority = (id: string) => {
+    const p = priorities.find(x => x.id === id);
+    if (!p) return;
+    setCompletingId(id);
+    playSupernovaChime();
+    toast({
+      title: "✦ Orbit Completed",
+      description: `"${p.name}" has been harmonized into your galaxy.`,
+    });
+    setTimeout(() => {
+      removePriority(id);
+      setCompletingId(null);
+    }, 650);
+  };
+
+  const resetPriorities = () => {
+    if (window.confirm('Restore initial demo priorities?')) {
       setPriorities(seedPriorities);
-      setSelectedId(seedPriorities[0].id);
+      setSelectedId(null);
+      toast({
+        title: "Galaxy Reset",
+        description: "Initial solar priorities restored.",
+      });
     }
   };
 
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target instanceof HTMLElement ? e.target : null;
+      if (isAddOpen || isManageOpen) return;
+      if (target?.closest('[role="tablist"], [role="dialog"]')) return;
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName ?? '')) return;
+      if (e.key === 'Escape') {
+        setSelectedId(null);
+        setIsZenMode(false);
+      } else if (e.key === ']' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        if (priorities.length === 0) return;
+        const idx = priorities.findIndex(p => p.id === selectedId);
+        const next = priorities[(idx + 1) % priorities.length];
+        selectPriority(next.id);
+      } else if (e.key === '[' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (priorities.length === 0) return;
+        const idx = priorities.findIndex(p => p.id === selectedId);
+        const prev = priorities[(idx - 1 + priorities.length) % priorities.length];
+        selectPriority(prev.id);
+      } else if (e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        setPanelsOpen(prev => !prev);
+      } else if (e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        setIsZenMode(prev => !prev);
+      } else if (e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        setIsAddOpen(true);
+      } else if (e.key.toLowerCase() === 'm') {
+        e.preventDefault();
+        setIsManageOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [priorities, selectedId, isAddOpen, isManageOpen]);
+
+  const rankedPriorities = useMemo(
+    () => [...priorities].sort((a, b) => getFocusScore(b) - getFocusScore(a)),
+    [priorities],
+  );
+  const topPriorities = rankedPriorities.slice(0, 3);
+  const selectedPriority = priorities.find(p => p.id === selectedId);
+  
+  const insight = useMemo(() => {
+    if (!selectedPriority) {
+      if (priorities.length === 0) return "Space is empty. Add a priority to begin.";
+      if (topPriorities.length > 0 && getFocusScore(topPriorities[0]) > 80) {
+        return `${topPriorities[0].name} demands attention. Consider giving it one clear next move.`;
+      }
+      return "Forces are balanced. Take a moment to reflect before choosing a path.";
+    }
+    const score = getFocusScore(selectedPriority);
+    if (score > 85) return `${selectedPriority.name} is pulling closest to now. Give it one clear next move before the rest of the sky gets louder.`;
+    if (selectedPriority.importance > 8 && selectedPriority.urgency < 5) return `Important but not urgent. Protect time for ${selectedPriority.name} before it becomes an emergency.`;
+    if (selectedPriority.energy > 8) return `High effort required. Break ${selectedPriority.name} into smaller pieces to reduce friction.`;
+    return `${selectedPriority.name} is steadily in orbit. Adjust its metrics if the situation shifts.`;
+  }, [selectedPriority, topPriorities, priorities.length]);
+
+  const insightTitle = useMemo(() => {
+    if (!priorities.length) return "Field is open.";
+    if (!selectedPriority) {
+      return topPriorities[0] && getFocusScore(topPriorities[0]) > 80
+        ? "Attention is concentrating."
+        : "Field is balanced.";
+    }
+    return "You're pulled toward action.";
+  }, [selectedPriority, topPriorities, priorities.length]);
+
+  const { mouseX, mouseY, handleMouseMove, handleMouseLeave } = useParallax();
+  const panX = useTransform(mouseX, [-0.5, 0.5], [12, -12]);
+  const panY = useTransform(mouseY, [-0.5, 0.5], [12, -12]);
+  const tiltX = useTransform(mouseY, [-0.5, 0.5], prefersReducedMotion ? [0, 0] : [2.5, -2.5]);
+  const tiltY = useTransform(mouseX, [-0.5, 0.5], prefersReducedMotion ? [0, 0] : [-2.5, 2.5]);
+  const brightnessRatio = cosmosBrightness / 100;
+  const cosmosVisualStyle = {
+    '--cosmos-bg-opacity': String(Math.min(1, 0.55 + brightnessRatio * 0.45)),
+    '--cosmos-star-opacity': String(Math.min(1, 0.45 + brightnessRatio * 0.55)),
+    '--cosmos-scene-opacity': String(Math.min(1, 0.5 + brightnessRatio * 0.5)),
+    '--cosmos-dim-opacity': String(Math.max(0, (100 - cosmosBrightness) / 100 * 0.55)),
+    '--cosmos-lift-opacity': String(Math.max(0, (cosmosBrightness - 100) / 30 * 0.32)),
+  } as CSSProperties;
+
   return (
-    <main className="galaxy-app min-h-[100dvh] relative overflow-x-hidden overflow-y-auto lg:overflow-hidden" onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
-      <div className="bg-stars pointer-events-none" />
+    <div 
+      className={`focus-galaxy-app relative w-full h-[100dvh] overflow-hidden bg-background select-none ${isZenMode ? 'zen-mode' : ''}`}
+      style={cosmosVisualStyle}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+    >
+      <div className="bg-stars" />
       <Particles />
       
-      <motion.div 
-        className="absolute inset-0 pointer-events-none"
-        initial={{ opacity: 0, filter: 'blur(3px)' }}
-        animate={{ 
-          opacity: isFormed ? 1 : 0, 
-          filter: isFormed ? 'blur(0px)' : 'blur(3px)' 
-        }}
-        transition={{ duration: 0.65, ease: "easeOut" }}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+        <div className="absolute top-1/4 left-8 md:left-12 max-w-[150px] opacity-70 hidden sm:block">
+           <p className="text-[12px] leading-relaxed text-white/80 font-display">"A calmer mind<br/>creates a brighter<br/>future."</p>
+           <div className="w-6 h-[1px] bg-white/30 mt-3" />
+        </div>
+        
+        <div className="absolute top-1/4 right-8 md:right-12 text-right max-w-[150px] opacity-70 hidden sm:block">
+           <p className="text-[12px] leading-relaxed text-white/80 font-display">Different priorities<br/>Same universe<br/>Your focus.</p>
+           <div className="w-6 h-[1px] bg-white/30 mt-3 ml-auto" />
+        </div>
+        
+        <div className="absolute bottom-12 left-8 md:left-12 flex flex-col gap-2 opacity-60 hidden sm:flex">
+           <Target size={16} className="text-white/50" />
+           <p className="text-[10px] text-white/60 font-display font-medium">Balance today<br/>A brighter tomorrow.</p>
+        </div>
+        
+        <div className="absolute bottom-12 right-8 md:right-12 flex flex-col gap-2 items-end text-right opacity-60 hidden sm:flex">
+           <Orbit size={16} className="text-white/50" />
+           <p className="text-[10px] text-white/60 font-display font-medium">"Focus is freedom."</p>
+        </div>
+      </div>
+
+      <header className="app-header fixed top-0 left-0 right-0 z-30 pointer-events-none">
+        <div className="header-inner flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="header-brand flex flex-col items-start gap-1 pointer-events-auto">
+            <AppLogo />
+            <span className="text-[11px] text-white/60 font-medium ml-1">Turn your priorities into clarity.</span>
+          </div>
+          
+          <div className="header-actions flex flex-col md:flex-row items-center gap-3 pointer-events-auto">
+            <button onClick={() => setIsAddOpen(true)} aria-label="Add priority" className="header-add flex items-center gap-2 px-5 py-2 rounded-full border border-primary/50 bg-primary/20 hover:bg-primary/30 text-white text-xs font-bold transition-colors shadow-[0_0_15px_rgba(155,91,228,0.3)]">
+              <Plus size={14} strokeWidth={3} /> Add Priority
+            </button>
+
+            <div className="header-utilities flex items-center gap-2">
+              <FocusAudio />
+
+              <CosmosBrightnessControl value={cosmosBrightness} onChange={setCosmosBrightness} />
+
+              <button onClick={() => setIsManageOpen(true)} aria-label="Manage priorities" className="header-manage flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-xs font-bold transition-colors">
+                <ListChecks size={15} />
+                <span className="header-manage-label">Manage</span>
+              </button>
+
+              <button onClick={resetPriorities} className="header-reset w-10 h-10 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors shadow-[0_4px_10px_rgba(0,0,0,0.5)]" aria-label="Reset priorities">
+                <RotateCcw size={15} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div id="orb-hit-layer" className="orb-hit-layer absolute inset-0 pointer-events-none" />
+
+      <motion.div
+        className="galaxy-viewport absolute inset-0 z-10 pointer-events-none"
+        style={{ x: panX, y: panY, rotateX: tiltX, rotateY: tiltY, transformPerspective: 1400, transformStyle: 'preserve-3d' }}
       >
-        <div className="absolute inset-0 lg:fixed lg:inset-0 h-[65vh] lg:h-auto min-h-[480px]">
-           <GalaxyStage 
-             priorities={priorities} 
-             selectedId={selectedId} 
-              completingId={completingId}
-              onSelect={selectPriority}
-             onAdd={() => setIsAddOpen(true)}
-             urgencyTrigger={urgencyTrigger}
-             prefersReducedMotion={prefersReducedMotion}
-             mouseX={mouseX}
-             mouseY={mouseY}
-           />
+        <div className="galaxy-layer absolute inset-0 transform-gpu origin-center pointer-events-none">
+          
+          {/* Tilted 3D Orbital Plane */}
+          <div className="orbital-plane">
+            <OrbitRings priorities={priorities} />
+
+            {selectedPriority && (
+               <AnimatePresence>
+                  <SelectedOrbitRing key={`selected-ring-${selectedPriority.id}`} priority={selectedPriority} />
+               </AnimatePresence>
+            )}
+
+            <AnimatePresence>
+              {priorities.map((p, i) => (
+                <OrbComponent
+                  key={p.id}
+                  priority={p}
+                  index={i}
+                  selectedId={selectedId}
+                  onSelect={selectPriority}
+                  isCompleting={p.id === completingId}
+                  prefersReducedMotion={prefersReducedMotion}
+                />
+              ))}
+            </AnimatePresence>
+          </div>
+
+          {/* Living Center of Gravity (YOU / NOW) */}
+          <LivingCore
+            topPriorities={topPriorities}
+            totalPriorities={priorities.length}
+            onSelectTop={() => {
+              if (topPriorities[0]) selectPriority(topPriorities[0].id);
+            }}
+          />
+          
         </div>
       </motion.div>
-      
-      <header className="absolute top-0 left-0 right-0 p-6 lg:p-8 flex justify-between items-start z-30 pointer-events-none">
-         <div className="flex flex-col gap-1 pointer-events-auto">
-            <div className="flex items-center gap-2">
-               <AppLogo />
-            </div>
-            <p className="text-[13px] text-muted-foreground mt-1.5 tracking-wide hidden sm:block ml-11">Turn your priorities into clarity.</p>
-         </div>
-         
-         <div className="flex items-center gap-4 lg:gap-6 pointer-events-auto">
-            <div className="hidden lg:flex gap-1 p-1 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
-               <span className="px-4 py-1.5 rounded-full bg-white/10 text-[11px] uppercase tracking-wider font-semibold text-white cursor-default">Today</span>
-               <span className="px-4 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-semibold text-white/40 cursor-default hover:text-white/70 transition-colors">This Week</span>
-               <span className="px-4 py-1.5 rounded-full text-[11px] uppercase tracking-wider font-semibold text-white/40 cursor-default hover:text-white/70 transition-colors">This Month</span>
-            </div>
-            
-            <button onClick={() => setIsAddOpen(true)} aria-label="Add priority" className="flex items-center gap-2 px-4 py-2 rounded-full border border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 hover:border-primary transition-all text-xs lg:text-sm font-semibold backdrop-blur-md shadow-[0_0_20px_rgba(155,91,228,0.15)]">
-               <Plus size={16} strokeWidth={2.5} /> <span className="hidden sm:inline">Add Priority</span>
-            </button>
 
-             <FocusAudio />
-
-             <button onClick={() => setIsManageOpen(true)} aria-label="Manage priorities" className="flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-all text-xs font-semibold backdrop-blur-md">
-                <ListChecks size={16} /> <span className="hidden md:inline">Manage</span>
-             </button>
-            
-            <button onClick={resetGalaxy} className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/10 text-white/70 hover:text-white transition-all backdrop-blur-md" aria-label="Reset galaxy">
-               <RotateCcw size={15} />
-            </button>
-         </div>
-      </header>
+      <div className="cosmos-dim-layer absolute inset-0 z-[15] pointer-events-none" aria-hidden="true" />
+      <div className="cosmos-lift-layer absolute inset-0 z-[15] pointer-events-none" aria-hidden="true" />
       
-      {/* Floating text elements */}
-      <div className="absolute top-[28%] left-10 text-muted-foreground/60 text-[13px] max-w-[180px] z-10 leading-relaxed tracking-wide hidden xl:block pointer-events-none">
-         "A calmer mind<br/>creates a brighter<br/>future."
-         <div className="w-6 h-[1px] bg-white/10 mt-5" />
-      </div>
-      
-      <div className="absolute top-[30%] right-10 text-muted-foreground/60 text-[13px] max-w-[160px] z-10 leading-relaxed tracking-wide hidden xl:block text-right pointer-events-none">
-         Different priorities<br/>Same universe<br/>Your focus.
-         <div className="w-6 h-[1px] bg-white/10 mt-5 ml-auto" />
-      </div>
+      <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-background via-background/80 to-transparent pointer-events-none z-10" />
 
-      <div className="absolute bottom-28 left-10 text-muted-foreground/60 text-[12px] max-w-[160px] z-10 leading-relaxed tracking-wide hidden xl:block pointer-events-none">
-         <div className="w-6 h-[1px] bg-white/10 mb-4" />
-         Balance today<br/>A brighter tomorrow.
-      </div>
-
-      <div className="absolute bottom-28 right-10 text-muted-foreground/60 text-[12px] z-10 hidden xl:block pointer-events-none tracking-wide">
-         "Focus is freedom."
-         <div className="w-6 h-[1px] bg-white/10 mt-4 ml-auto" />
-      </div>
-      
-      {/* Bottom panels wrapper */}
       <motion.div
-        className="relative lg:absolute lg:-bottom-2 lg:left-8 lg:right-8 z-20 mt-[60vh] lg:mt-0 p-4 lg:p-0 pointer-events-none"
-        animate={{ y: panelsOpen ? 0 : 245 }}
+        className="insight-dock absolute bottom-28 left-6 right-6 flex flex-col xl:flex-row items-end xl:items-end justify-center gap-8 z-20 pointer-events-none"
+        animate={{ y: (panelsOpen && !isZenMode) ? 0 : 320 }}
         transition={{ type: 'spring', stiffness: 180, damping: 24 }}
       >
         <button
           type="button"
           onClick={() => setPanelsOpen((open) => !open)}
-          className="hidden lg:flex absolute left-1/2 -top-9 -translate-x-1/2 z-30 h-8 items-center gap-2 rounded-full border border-white/15 bg-[#110d19]/90 px-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/65 backdrop-blur-xl hover:border-primary/40 hover:text-white pointer-events-auto"
+          className="hidden xl:flex absolute right-0 -top-10 z-30 h-8 items-center gap-2 rounded-full border border-white/15 bg-[#110d19]/90 px-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/65 backdrop-blur-xl hover:border-primary/40 hover:text-white pointer-events-auto"
           aria-expanded={panelsOpen}
-          aria-label={panelsOpen ? 'Lower insight cards' : 'Raise insight cards'}
         >
           {panelsOpen ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
-          {panelsOpen ? 'Focus on galaxy' : 'Show insights'}
+          {panelsOpen ? 'Focus on galaxy (F)' : 'Show insights (F)'}
         </button>
-        <motion.div 
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 lg:gap-8 max-w-[1200px] mx-auto pointer-events-auto"
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: isFormed ? (panelsOpen ? 1 : 0.35) : 0, y: isFormed ? 0 : 30 }}
-          transition={{ duration: 1, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-        >
-           {priorities.length > 0 && <FocusSignalPanel topPriorities={topPriorities} onSelect={selectPriority} onRename={renamePriority} />}
-           {priorities.length > 0 && <InsightPanel insight={insight} priority={selectedPriority} />}
-           {priorities.length > 0 && <SelectedPanel priority={selectedPriority} onUpdate={updateSelected} onRename={renameSelected} onComplete={completeSelected} onRemove={removeSelected} onClose={() => setSelectedId(null)} />}
-        </motion.div>
+        
+        <div className="panel-slot panel-slot-signal w-full xl:w-[min(30vw,400px)] shrink-0 transform-gpu transition-all duration-500 hidden md:block">
+           <FocusSignalPanel 
+             rankedPriorities={rankedPriorities}
+             onSelect={selectPriority}
+             onRename={renamePriority}
+             color={topPriorities[0]?.hue || '#9b5be4'}
+             summary={getSignalSummary(topPriorities)}
+           />
+        </div>
+        
+        <div className="panel-slot panel-slot-insight w-full xl:w-[min(30vw,400px)] shrink-0 transform-gpu transition-all duration-500 hidden md:block">
+           <InsightPanel 
+             insight={insight} 
+             title={insightTitle}
+             priority={selectedPriority || topPriorities[0]} 
+           />
+        </div>
+        
+        <AnimatePresence initial={false} mode="popLayout">
+          {selectedPriority && (
+            <div key={selectedPriority.id} className="panel-slot panel-slot-selected w-full xl:w-[min(30vw,400px)] shrink-0 transform-gpu transition-all duration-500">
+              <motion.div
+                className="h-full"
+                initial={{ opacity: 0, y: 18, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 18, scale: 0.98 }}
+                transition={{ type: 'spring', stiffness: 220, damping: 24 }}
+              >
+                <SelectedPanel
+                  priority={selectedPriority}
+                  onUpdate={(metric, val) => updatePriority(selectedPriority.id, metric, val)}
+                  onRename={(name) => renamePriority(selectedPriority.id, name)}
+                  onComplete={() => completePriority(selectedPriority.id)}
+                  onClose={() => setSelectedId(null)}
+                  onRemove={() => removePriority(selectedPriority.id)}
+                />
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </motion.div>
-      
+
       <AnimatePresence>
-        {isAddOpen && <AddPriorityDialog onClose={() => setIsAddOpen(false)} onCreate={createPriority} />}
+        {isAddOpen && (
+          <AddPriorityDialog 
+            onClose={() => setIsAddOpen(false)} 
+            onCreate={addPriority} 
+          />
+        )}
         {isManageOpen && (
           <ManageTasksDialog
             priorities={priorities}
             onClose={() => setIsManageOpen(false)}
             onSelect={selectPriority}
             onRename={renamePriority}
+            onRemove={removePriority}
           />
         )}
       </AnimatePresence>
-    </main>
+
+      {/* Keyboard Shortcuts and Galaxy Explore Pill */}
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 pointer-events-auto hidden md:flex items-center gap-3 opacity-60 hover:opacity-100 transition-opacity bg-black/50 px-4 py-1.5 rounded-full border border-white/10 backdrop-blur-md text-[11px] text-white/70">
+        <span className="font-semibold text-white/90">Shortcuts:</span>
+        <span><kbd className="px-1.5 py-0.5 rounded bg-white/10 border border-white/15 text-[10px] text-white">[</kbd> / <kbd className="px-1.5 py-0.5 rounded bg-white/10 border border-white/15 text-[10px] text-white">]</kbd> Cycle</span>
+        <span className="text-white/20">•</span>
+        <span><kbd className="px-1.5 py-0.5 rounded bg-white/10 border border-white/15 text-[10px] text-white">F</kbd> Dock</span>
+        <span className="text-white/20">•</span>
+        <span><kbd className="px-1.5 py-0.5 rounded bg-white/10 border border-white/15 text-[10px] text-white">Esc</kbd> Deselect</span>
+      </div>
+    </div>
   );
 }
 
@@ -1138,12 +2068,10 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter>
-          <Switch>
-            <Route path="/" component={Home} />
-            <Route component={NotFound} />
-          </Switch>
-        </WouterRouter>
+        <Switch>
+          <Route path="/" component={FocusGalaxyContainer} />
+          <Route component={NotFound} />
+        </Switch>
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>

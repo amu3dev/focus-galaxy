@@ -4,11 +4,11 @@ Focus Galaxy is a local-first focus and priority map that turns tasks into an in
 
 ## Product screenshots
 
-![Focus Galaxy running in a desktop browser, captured at 1440×900](https://raw.githubusercontent.com/amu3dev/focus-galaxy/cosmos/next-level-experience/docs/assets/focus-galaxy-desktop.jpg)
+![Focus Galaxy running in a desktop browser, captured at 1440×900](docs/assets/focus-galaxy-desktop.jpg)
 
 *Captured from the running app with its six seeded sample priorities.*
 
-![Focus Galaxy running in a phone-sized browser, captured at 390×844](https://raw.githubusercontent.com/amu3dev/focus-galaxy/cosmos/next-level-experience/docs/assets/focus-galaxy-mobile.jpg)
+![Focus Galaxy running in a phone-sized browser, captured at 390×844](docs/assets/focus-galaxy-mobile.jpg)
 
 *The same live app and sample priorities at a phone-sized viewport.*
 
@@ -46,6 +46,20 @@ Useful checks:
 pnpm run typecheck
 pnpm run build
 ```
+
+## Deploy on Cloudflare Workers
+
+The app deploys as static assets on a Cloudflare Worker. The GitHub Actions workflow deploys `main` when the app or deployment files change. Add a Cloudflare API token with the `Edit Cloudflare Workers` permission as the repository secret `CLOUDFLARE_API_TOKEN`, scoped to the account that owns the Worker. See [Cloudflare's GitHub Actions setup](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/).
+
+For a manual deploy, authenticate Wrangler to Cloudflare and run:
+
+```bash
+pnpm run deploy:focus-galaxy
+```
+
+Live site: <https://focus-galaxy.amu3dev.workers.dev>
+
+The Worker uses the `workers.dev` subdomain and serves the built single-page app from `artifacts/focus-galaxy/dist/public`.
 
 ## Optional Spotify playback
 
