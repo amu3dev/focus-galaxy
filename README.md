@@ -49,7 +49,7 @@ pnpm run build
 
 ## Deploy on Cloudflare Workers
 
-The app deploys as static assets on a Cloudflare Worker. The GitHub Actions workflow deploys `main` when the app or deployment files change. Add a Cloudflare API token with the `Edit Cloudflare Workers` permission as the repository secret `CLOUDFLARE_API_TOKEN`, scoped to the account that owns the Worker. See [Cloudflare's GitHub Actions setup](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/).
+The app deploys as static assets to <https://focus-galaxy.amu3dev.workers.dev> through Cloudflare Workers Builds, connected to `amu3dev/focus-galaxy`. Pushes to `main` trigger production builds. Cloudflare runs `PORT=18857 BASE_PATH=/ pnpm --filter @workspace/focus-galaxy run build`, then deploys with `pnpm dlx wrangler@4.142.0 deploy --config wrangler.jsonc`. The build root is the repository root.
 
 For a manual deploy, authenticate Wrangler to Cloudflare and run:
 
