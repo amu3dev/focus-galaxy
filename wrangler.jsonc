@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "focus-galaxy",
+  "account_id": "88d16df2557c41b24b9cb80b208c1c4d",
+  "workers_dev": true,
+  "compatibility_date": "2026-09-29",
+  "assets": {
+    "directory": "./artifacts/focus-galaxy/dist/public",
+    "not_found_handling": "single-page-application"
+  }
+}

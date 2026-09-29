@@ -47,6 +47,20 @@ pnpm run typecheck
 pnpm run build
 ```
 
+## Deploy on Cloudflare Workers
+
+The app deploys as static assets on a Cloudflare Worker. The GitHub Actions workflow deploys `main` when the app or deployment files change. Add a Cloudflare API token with the `Edit Cloudflare Workers` permission as the repository secret `CLOUDFLARE_API_TOKEN`, scoped to the account that owns the Worker. See [Cloudflare's GitHub Actions setup](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/).
+
+For a manual deploy, authenticate Wrangler to Cloudflare and run:
+
+```bash
+pnpm run deploy:focus-galaxy
+```
+
+Live site: <https://focus-galaxy.amu3dev.workers.dev>
+
+The Worker uses the `workers.dev` subdomain and serves the built single-page app from `artifacts/focus-galaxy/dist/public`.
+
 ## Optional Spotify playback
 
 Spotify playback is opt-in. Create a Spotify Developer app, add the exact URL where Focus Galaxy runs to its Redirect URI allowlist, then set the public client ID in `.env.local`:
