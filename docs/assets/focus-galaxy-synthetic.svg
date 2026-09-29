@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">Focus Galaxy synthetic product screenshot</title>
+  <desc id="desc">A synthetic dark productivity UI showing an interactive task galaxy, focus score, task factors, and a start-focus action. No real user data is shown.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#090d22"/>
+      <stop offset="1" stop-color="#17113a"/>
+    </linearGradient>
+    <radialGradient id="core" cx="50%" cy="50%" r="60%">
+      <stop offset="0" stop-color="#a48bff" stop-opacity=".95"/>
+      <stop offset=".45" stop-color="#735cf0" stop-opacity=".45"/>
+      <stop offset="1" stop-color="#2e2772" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="button" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffcf70"/>
+      <stop offset="1" stop-color="#ff8b9e"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <g fill="#d6d1ff" opacity=".55">
+    <circle cx="310" cy="100" r="2"/><circle cx="460" cy="210" r="1.5"/><circle cx="706" cy="88" r="2"/><circle cx="894" cy="178" r="1.5"/><circle cx="1140" cy="106" r="2"/><circle cx="1350" cy="240" r="1.5"/><circle cx="1230" cy="668" r="2"/><circle cx="500" cy="760" r="1.5"/><circle cx="850" cy="770" r="2"/><circle cx="1460" cy="780" r="1.5"/>
+  </g>
+  <rect x="0" y="0" width="236" height="900" fill="#11102e"/>
+  <rect x="236" y="0" width="1" height="900" fill="#302b68"/>
+  <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, sans-serif">
+    <text x="38" y="63" font-size="25" font-weight="700" fill="#f3f0ff">Focus Galaxy</text>
+    <text x="38" y="91" font-size="12" letter-spacing="2" fill="#a997ff">FOCUS / MVP</text>
+    <rect x="25" y="132" width="185" height="44" rx="12" fill="#29235d" stroke="#5d50b6"/>
+    <circle cx="51" cy="154" r="7" fill="#ffcf70"/>
+    <text x="70" y="159" font-size="15" font-weight="600" fill="#f3f0ff">Today</text>
+    <text x="47" y="220" font-size="15" fill="#a9a4d2">All priorities</text>
+    <text x="47" y="266" font-size="15" fill="#a9a4d2">Completed</text>
+    <text x="47" y="312" font-size="15" fill="#a9a4d2">Settings</text>
+    <line x1="38" y1="370" x2="198" y2="370" stroke="#302b68"/>
+    <text x="38" y="412" font-size="11" letter-spacing="1.5" fill="#7772aa">LOCAL WORKSPACE</text>
+    <rect x="38" y="445" width="110" height="27" rx="13" fill="#26344e"/>
+    <text x="57" y="463" font-size="11" fill="#8ce2d1">LOCALSTORAGE</text>
+    <text x="38" y="822" font-size="12" fill="#7772aa">Synthetic MVP UI</text>
+    <text x="38" y="846" font-size="12" fill="#7772aa">No real task data</text>
+
+    <text x="280" y="71" font-size="14" fill="#8f89c7">TODAY / PRIORITIES</text>
+    <text x="280" y="120" font-size="34" font-weight="700" fill="#f5f2ff">Your focus galaxy</text>
+    <text x="280" y="151" font-size="16" fill="#aaa5cf">Importance, urgency, and effort become a visible map.</text>
+    <rect x="1200" y="54" width="325" height="38" rx="19" fill="#302b68" stroke="#6358ad"/>
+    <text x="1225" y="79" font-size="12" letter-spacing="1.15" fill="#e5e0ff">SYNTHETIC UI • NO REAL TASKS</text>
+
+    <rect x="280" y="190" width="825" height="602" rx="22" fill="#100f2d" stroke="#35306d"/>
+    <text x="316" y="236" font-size="13" letter-spacing="1.4" fill="#a997ff">INTERACTIVE PRIORITY MAP</text>
+    <text x="316" y="267" font-size="14" fill="#817db4">Select a planet to inspect its focus factors.</text>
+    <circle cx="690" cy="490" r="232" fill="none" stroke="#302b68" stroke-width="1" stroke-dasharray="3 12"/>
+    <circle cx="690" cy="490" r="160" fill="none" stroke="#3b347e" stroke-width="1" stroke-dasharray="2 10"/>
+    <circle cx="690" cy="490" r="78" fill="url(#core)"/>
+    <circle cx="690" cy="490" r="35" fill="#9e8bff" opacity=".9"/>
+    <text x="654" y="485" font-size="12" font-weight="700" fill="#fff">TODAY</text>
+    <text x="648" y="505" font-size="11" fill="#e8e3ff">FOCUS</text>
+    <path d="M690 330 C820 322 900 410 870 505" fill="none" stroke="#655ad4" stroke-width="2" opacity=".75"/>
+    <path d="M690 650 C540 650 450 580 470 480" fill="none" stroke="#655ad4" stroke-width="2" opacity=".75"/>
+    <path d="M530 390 C580 310 700 280 790 338" fill="none" stroke="#655ad4" stroke-width="2" opacity=".55"/>
+    <g>
+      <circle cx="842" cy="363" r="29" fill="#ffcf70" stroke="#ffe3a4" stroke-width="3"/>
+      <text x="799" y="325" font-size="13" font-weight="650" fill="#f8edc7">Ship v1 demo</text>
+      <text x="825" y="410" font-size="11" fill="#aaa5cf">high priority</text>
+    </g>
+    <g>
+      <circle cx="465" cy="475" r="24" fill="#73d9c7" stroke="#b1f1e4" stroke-width="3"/>
+      <text x="355" y="454" font-size="13" font-weight="650" fill="#d7faf3">Review hiring brief</text>
+      <text x="419" y="520" font-size="11" fill="#aaa5cf">steady effort</text>
+    </g>
+    <g>
+      <circle cx="806" cy="638" r="20" fill="#f48ba3" stroke="#ffc0ce" stroke-width="3"/>
+      <text x="825" y="655" font-size="13" font-weight="650" fill="#ffe0e7">Write product brief</text>
+      <text x="825" y="676" font-size="11" fill="#aaa5cf">needs attention</text>
+    </g>
+    <g>
+      <circle cx="548" cy="665" r="15" fill="#879cff" stroke="#c3cdff" stroke-width="3"/>
+      <text x="465" y="716" font-size="13" font-weight="650" fill="#e1e5ff">Plan sprint</text>
+    </g>
+    <rect x="316" y="730" width="150" height="34" rx="10" fill="#28235b"/>
+    <text x="351" y="752" font-size="12" font-weight="650" fill="#d9d4ff">+ Add priority</text>
+    <text x="940" y="752" font-size="12" fill="#817db4">4 active priorities</text>
+
+    <rect x="1130" y="190" width="395" height="602" rx="22" fill="#141238" stroke="#453d85"/>
+    <text x="1165" y="236" font-size="13" letter-spacing="1.4" fill="#a997ff">SELECTED PRIORITY</text>
+    <text x="1165" y="286" font-size="25" font-weight="700" fill="#f5f2ff">Ship v1 demo</text>
+    <rect x="1165" y="312" width="116" height="28" rx="14" fill="#513e5c"/>
+    <text x="1192" y="330" font-size="11" fill="#ffd99a">HIGH PRIORITY</text>
+    <text x="1165" y="388" font-size="12" letter-spacing="1.2" fill="#817db4">FOCUS SCORE</text>
+    <text x="1165" y="455" font-size="66" font-weight="750" fill="#ffcf70">86</text>
+    <text x="1250" y="447" font-size="15" fill="#aaa5cf">/ 100</text>
+    <text x="1250" y="472" font-size="13" fill="#73d9c7">Strong next action</text>
+    <line x1="1165" y1="510" x2="1490" y2="510" stroke="#35306d"/>
+    <text x="1165" y="550" font-size="14" fill="#c4bfeb">Importance</text>
+    <text x="1418" y="550" font-size="14" font-weight="650" fill="#f5f2ff">9 / 10</text>
+    <rect x="1165" y="562" width="325" height="7" rx="4" fill="#2b2760"/><rect x="1165" y="562" width="292" height="7" rx="4" fill="#ffcf70"/>
+    <text x="1165" y="603" font-size="14" fill="#c4bfeb">Urgency</text>
+    <text x="1418" y="603" font-size="14" font-weight="650" fill="#f5f2ff">8 / 10</text>
+    <rect x="1165" y="615" width="325" height="7" rx="4" fill="#2b2760"/><rect x="1165" y="615" width="260" height="7" rx="4" fill="#f48ba3"/>
+    <text x="1165" y="656" font-size="14" fill="#c4bfeb">Effort</text>
+    <text x="1418" y="656" font-size="14" font-weight="650" fill="#f5f2ff">4 / 10</text>
+    <rect x="1165" y="668" width="325" height="7" rx="4" fill="#2b2760"/><rect x="1165" y="668" width="130" height="7" rx="4" fill="#73d9c7"/>
+    <rect x="1165" y="712" width="196" height="42" rx="11" fill="url(#button)"/>
+    <text x="1201" y="738" font-size="14" font-weight="700" fill="#23152b">Start focus session</text>
+  </g>
+</svg>
