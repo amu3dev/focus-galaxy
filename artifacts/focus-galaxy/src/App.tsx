@@ -1,13 +1,29 @@
 import { useEffect, useMemo, useRef, useState, memo, type CSSProperties, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, RotateCcw, X, Target, Activity, Orbit, Trash2, ListChecks, Volume2, VolumeX, Music2, CheckCircle2, ChevronDown, ChevronUp, SunMedium } from 'lucide-react';
+import { Plus, RotateCcw, X, Target, Activity, Orbit, Trash2, ListChecks, Volume2, VolumeX, Music2, CheckCircle2, ChevronDown, ChevronUp, SunMedium, MoreHorizontal } from 'lucide-react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import NotFound from '@/pages/not-found';
 import { Route, Switch } from 'wouter';
-import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
+import { MotionConfig, motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
 
 type Priority = {
   id: string;
@@ -19,6 +35,13 @@ type Priority = {
 };
 
 type MetricKey = 'importance' | 'urgency' | 'energy';
+
+type Confirmation = {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+};
 
 const STORAGE_KEY = 'focus-galaxy-priorities-v2';
 const SPOTIFY_SESSION_KEY = 'focus-galaxy-spotify-session';
@@ -717,7 +740,7 @@ function FocusAudio() {
           if (audioSource === 'local' && isPlaying) stopAudio();
           setStyle(event.target.value as 'classical' | 'baroque' | 'nocturne');
         }}
-        className="hidden sm:block max-w-[126px] border-0 border-l border-white/10 bg-transparent py-2 pl-2 pr-7 text-[11px] font-semibold text-white/75 outline-none cursor-pointer"
+        className="audio-style-select hidden sm:block max-w-[126px] border-0 border-l border-white/10 bg-transparent py-2 pl-2 pr-7 text-[11px] font-semibold text-white/75 outline-none cursor-pointer"
       >
         <option value="classical" className="bg-[#100d18]">Classical Flow</option>
         <option value="baroque" className="bg-[#100d18]">Baroque Focus</option>
@@ -910,7 +933,14 @@ function useDialogFocus<T extends HTMLElement>(onClose: () => void) {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       requestAnimationFrame(() => {
-        if (opener?.isConnected && !document.querySelector('[role="dialog"]')) opener.focus();
+        if (document.querySelector('[role="dialog"]')) return;
+        if (opener?.isConnected && opener.getClientRects().length > 0) {
+          opener.focus({ preventScroll: true });
+          return;
+        }
+        if (opener?.closest('.header-utilities')) {
+          document.getElementById('mobile-galaxy-controls-trigger')?.focus({ preventScroll: true });
+        }
       });
     };
   }, []);
@@ -923,19 +953,19 @@ function ManageTasksDialog({
   onClose,
   onSelect,
   onRename,
-  onRemove,
+  onRequestRemove,
 }: {
   priorities: Priority[];
   onClose: () => void;
   onSelect: (id: string) => void;
   onRename: (id: string, name: string) => void;
-  onRemove: (id: string) => void;
+  onRequestRemove: (id: string) => void;
 }) {
   const dialogRef = useDialogFocus<HTMLDivElement>(onClose);
 
   return (
     <motion.div
-      className="fixed inset-0 z-50 grid place-items-center p-4 bg-background/60 backdrop-blur-sm"
+      className="manage-dialog-overlay fixed inset-0 z-50 grid place-items-center p-4 bg-background/60 backdrop-blur-sm"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -944,7 +974,7 @@ function ManageTasksDialog({
       }}
     >
       <motion.div
-        className="add-dialog w-full max-w-md"
+        className="add-dialog manage-dialog w-full max-w-md"
         ref={dialogRef}
         role="dialog"
         tabIndex={-1}
@@ -963,52 +993,135 @@ function ManageTasksDialog({
             <X size={16} />
           </button>
         </div>
-        <div className="flex flex-col gap-2 max-h-[55vh] overflow-y-auto pr-1">
+        <div className="manage-priority-list flex flex-col gap-2 max-h-[55vh] overflow-y-auto pr-1">
           {priorities.map((priority) => (
-            <div key={priority.id} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-2.5">
+            <div key={priority.id} className="manage-priority-card flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-2.5">
               <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: priority.hue, boxShadow: `0 0 9px ${priority.hue}` }} />
-              <input
-                key={priority.name}
-                defaultValue={priority.name}
-                maxLength={40}
-                aria-label={`Rename ${priority.name}`}
-                onBlur={(event) => {
-                  const nextName = event.currentTarget.value.trim();
-                  if (nextName) onRename(priority.id, nextName);
-                  else event.currentTarget.value = priority.name;
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') event.currentTarget.blur();
-                }}
-                className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm font-semibold text-white outline-none focus:border-primary/60 transition-colors"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  onSelect(priority.id);
-                  onClose();
-                }}
-                aria-label={`Select ${priority.name}`}
-                className="px-3 py-2 rounded-lg border border-white/10 text-[11px] font-bold text-white/60 hover:bg-white/10 hover:text-white transition-colors"
-              >
-                Select
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (window.confirm(`Remove ${priority.name} from orbit?`)) onRemove(priority.id);
-                }}
-                aria-label={`Remove ${priority.name}`}
-                title="Remove priority"
-                className="h-9 w-9 shrink-0 rounded-lg border border-white/10 text-white/40 flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 transition-colors"
-              >
-                <Trash2 size={15} aria-hidden="true" />
-              </button>
+              <div className="manage-priority-copy min-w-0 flex-1">
+                <input
+                  key={priority.name}
+                  defaultValue={priority.name}
+                  maxLength={40}
+                  aria-label={`Rename ${priority.name}`}
+                  onBlur={(event) => {
+                    const nextName = event.currentTarget.value.trim();
+                    if (nextName) onRename(priority.id, nextName);
+                    else event.currentTarget.value = priority.name;
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') event.currentTarget.blur();
+                  }}
+                  className="manage-priority-name min-w-0 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm font-semibold text-white outline-none focus:border-primary/60 transition-colors"
+                />
+                <div className="manage-priority-meta" aria-label={`Score ${getFocusScore(priority)}, ${getFocusScore(priority) > 75 ? 'high focus' : 'in orbit'}`}>
+                  <span>{getFocusScore(priority) > 75 ? 'High focus' : 'In orbit'}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>Score {getFocusScore(priority)}</span>
+                </div>
+              </div>
+              <div className="manage-priority-score" aria-label={`Focus score ${getFocusScore(priority)}`}>
+                <div className="h-[6px] bg-white/10 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full" style={{ width: `${getFocusScore(priority)}%`, backgroundColor: priority.hue, boxShadow: `0 0 10px ${priority.hue}` }} />
+                </div>
+                <span>{getFocusScore(priority)}</span>
+              </div>
+              <div className="manage-priority-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSelect(priority.id);
+                    onClose();
+                  }}
+                  aria-label={`Select ${priority.name}`}
+                  className="manage-priority-select"
+                >
+                  Select
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onRequestRemove(priority.id)}
+                  aria-label={`Remove ${priority.name}`}
+                  title="Remove priority"
+                  className="manage-priority-remove"
+                >
+                  <Trash2 size={17} aria-hidden="true" />
+                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={`More actions for ${priority.name}`}
+                      className="manage-priority-more"
+                    >
+                      <MoreHorizontal size={20} aria-hidden="true" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="focus-context-menu">
+                    <DropdownMenuItem
+                      className="focus-context-danger"
+                      onSelect={() => onRequestRemove(priority.id)}
+                    >
+                      <Trash2 size={16} aria-hidden="true" />
+                      Remove priority
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
           ))}
         </div>
       </motion.div>
     </motion.div>
+  );
+}
+
+function ConfirmActionDialog({
+  confirmation,
+  openerRef,
+  onClose,
+}: {
+  confirmation: Confirmation | null;
+  openerRef: { current: HTMLElement | null };
+  onClose: () => void;
+}) {
+  return (
+    <AlertDialog open={Boolean(confirmation)} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <AlertDialogContent
+        className="focus-confirm-content"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          requestAnimationFrame(() => {
+            const opener = openerRef.current;
+            if (opener?.isConnected && opener.getClientRects().length > 0) {
+              opener.focus({ preventScroll: true });
+              return;
+            }
+            const manageDialog = document.querySelector<HTMLElement>('[role="dialog"][aria-labelledby="manage-tasks-title"]');
+            const fallback = manageDialog?.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled])')
+              ?? document.querySelector<HTMLElement>('#mobile-galaxy-controls-trigger')
+              ?? document.querySelector<HTMLElement>('.orb-screen-hit');
+            fallback?.focus({ preventScroll: true });
+          });
+        }}
+      >
+        <AlertDialogHeader className="focus-confirm-header">
+          <span className="focus-confirm-kicker">Focus Galaxy</span>
+          <AlertDialogTitle className="focus-confirm-title">{confirmation?.title}</AlertDialogTitle>
+          <AlertDialogDescription className="focus-confirm-description">
+            {confirmation?.description}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="focus-confirm-actions">
+          <AlertDialogCancel className="focus-confirm-cancel">Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="focus-confirm-destructive"
+            onClick={() => confirmation?.onConfirm()}
+          >
+            {confirmation?.confirmLabel}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -1050,16 +1163,26 @@ function SelectedPanel({
   onRename,
   onComplete,
   onClose,
-  onRemove,
+  onRequestRemove,
+  isMobile,
+  isExpanded,
+  onToggleExpanded,
+  prefersReducedMotion,
 }: {
   priority?: Priority;
   onUpdate: (metric: MetricKey, val: number) => void;
   onRename: (name: string) => void;
   onComplete: () => void;
   onClose: () => void;
-  onRemove: () => void;
+  onRequestRemove: () => void;
+  isMobile: boolean;
+  isExpanded: boolean;
+  onToggleExpanded: (expanded: boolean) => void;
+  prefersReducedMotion: boolean;
 }) {
   const [name, setName] = useState(priority?.name ?? '');
+  const swipeStartY = useRef<number | null>(null);
+  const suppressHandleClick = useRef(false);
 
   useEffect(() => {
     setName(priority?.name ?? '');
@@ -1081,7 +1204,8 @@ function SelectedPanel({
 
   return (
     <form
-      className="selected-panel-card panel-card flex flex-col relative overflow-hidden h-full z-20 pointer-events-auto"
+      className={`selected-panel-card panel-card flex flex-col relative overflow-hidden h-full z-20 pointer-events-auto${isMobile ? ' mobile-priority-sheet' : ''}`}
+      data-expanded={isExpanded}
       onSubmit={(event) => {
         event.preventDefault();
         saveName();
@@ -1092,33 +1216,88 @@ function SelectedPanel({
         borderColor: `${priority.hue}50`,
       } as any}
     >
-      <div className="flex justify-between items-start mb-3">
+      {isMobile && (
+        <button
+          type="button"
+          className="mobile-sheet-handle"
+          aria-label={isExpanded ? 'Collapse priority details' : 'Expand priority details'}
+          aria-expanded={isExpanded}
+          onTouchStart={(event) => {
+            swipeStartY.current = event.touches[0]?.clientY ?? null;
+          }}
+          onTouchEnd={(event) => {
+            const startY = swipeStartY.current;
+            swipeStartY.current = null;
+            if (startY === null) return;
+            const delta = event.changedTouches[0]?.clientY - startY;
+            if (Math.abs(delta) < 28) return;
+            suppressHandleClick.current = true;
+            onToggleExpanded(delta < 0);
+          }}
+          onClick={() => {
+            if (suppressHandleClick.current) {
+              suppressHandleClick.current = false;
+              return;
+            }
+            onToggleExpanded(!isExpanded);
+          }}
+        >
+          <span className="mobile-sheet-grabber" aria-hidden="true" />
+        </button>
+      )}
+
+      <div className="selected-panel-header flex justify-between items-start mb-3">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-full shadow-[0_0_20px_var(--c)] relative shrink-0" style={{ '--c': priority.hue, background: `radial-gradient(circle at 35% 35%, #fff 0%, ${priority.hue} 50%, #000 90%)` } as any}>
             <div className="absolute inset-0 rounded-full shadow-[inset_0_0_10px_rgba(255,255,255,0.5)] pointer-events-none"></div>
           </div>
           <div className="flex flex-col justify-center min-w-0">
-             <label htmlFor="selected-priority-name" className="sr-only">Planet name</label>
-             <input
-               id="selected-priority-name"
-               value={name}
-               onChange={(event) => setName(event.target.value)}
-               onBlur={saveName}
-               maxLength={40}
-               className="w-full min-w-0 max-w-[180px] rounded-md border border-transparent bg-transparent px-1 py-1 -ml-1 font-sans font-bold text-[17px] leading-none text-white tracking-wide outline-none transition-colors hover:border-white/10 hover:bg-white/5 focus:border-white/20 focus:bg-white/10"
-             />
-            <span className="text-[10px] uppercase tracking-widest font-display font-bold mt-1 px-1" style={{ color: priority.hue }}>
-               {getFocusScore(priority) > 75 ? 'HIGH FOCUS' : 'IN ORBIT'} • SCORE {getFocusScore(priority)}
-            </span>
+            {isMobile && !isExpanded ? (
+              <button
+                type="button"
+                className="mobile-sheet-summary"
+                onClick={() => onToggleExpanded(true)}
+                aria-expanded={false}
+                aria-label={`Expand ${priority.name}, score ${getFocusScore(priority)}`}
+              >
+                <span className="mobile-sheet-name">{priority.name}</span>
+                <span className="mobile-sheet-score">Score <strong>{getFocusScore(priority)}</strong></span>
+              </button>
+            ) : (
+              <>
+                <label htmlFor="selected-priority-name" className="sr-only">Planet name</label>
+                <input
+                  id="selected-priority-name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  onBlur={saveName}
+                  maxLength={40}
+                  className="w-full min-w-0 max-w-[180px] rounded-md border border-transparent bg-transparent px-1 py-1 -ml-1 font-sans font-bold text-[17px] leading-none text-white tracking-wide outline-none transition-colors hover:border-white/10 hover:bg-white/5 focus:border-white/20 focus:bg-white/10"
+                />
+                <span className="selected-panel-score text-[10px] uppercase tracking-widest font-display font-bold mt-1 px-1" style={{ color: priority.hue }}>
+                  {getFocusScore(priority) > 75 ? 'HIGH FOCUS' : 'IN ORBIT'} • SCORE {getFocusScore(priority)}
+                </span>
+              </>
+            )}
           </div>
         </div>
-        <button type="button" onClick={onClose} className="text-white/40 hover:text-white transition-colors p-1" aria-label="Close panel">
+        <button type="button" onClick={onClose} className="selected-panel-close text-white/40 hover:text-white transition-colors p-1" aria-label="Close panel">
            <X size={18} />
         </button>
       </div>
 
+      <AnimatePresence initial={false}>
+        {(!isMobile || isExpanded) && (
+          <motion.div
+            key="priority-details"
+            className="selected-panel-details"
+            initial={prefersReducedMotion ? false : { opacity: 0, height: 0, y: -8 }}
+            animate={{ opacity: 1, height: 'auto', y: 0 }}
+            exit={prefersReducedMotion ? undefined : { opacity: 0, height: 0, y: -8 }}
+            transition={prefersReducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 260, damping: 28 }}
+          >
       {/* Quick Presets */}
-      <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+      <div className="selected-panel-presets flex items-center gap-1.5 mb-3 flex-wrap">
         <span className="text-[9px] uppercase tracking-widest text-white/40 font-bold mr-0.5">Presets:</span>
         <button
           type="button"
@@ -1154,16 +1333,29 @@ function SelectedPanel({
         </button>
       </div>
       
-      <div className="flex flex-col gap-4">
+      <div className="selected-panel-metrics flex flex-col gap-4">
          <RangeControl label="Importance" value={priority.importance} color={priority.hue} onChange={(v) => onUpdate('importance', v)} />
          <RangeControl label="Urgency" value={priority.urgency} color={priority.hue} onChange={(v) => onUpdate('urgency', v)} />
          <RangeControl label="Energy / Effort" value={priority.energy} color={priority.hue} onChange={(v) => onUpdate('energy', v)} />
       </div>
       
-      <div className="flex items-center gap-3 mt-4">
-        <button type="button" onClick={() => { if(window.confirm(`Remove ${priority.name} from orbit?`)) onRemove() }} aria-label="Delete priority" className="w-10 h-10 rounded-xl border border-white/10 bg-white/5 text-white/40 flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 transition-colors">
+      <div className="selected-panel-actions flex items-center gap-3 mt-4">
+        <button type="button" onClick={onRequestRemove} aria-label="Delete priority" className="selected-panel-delete w-10 h-10 rounded-xl border border-white/10 bg-white/5 text-white/40 flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 transition-colors">
           <Trash2 size={16} />
         </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" aria-label={`More actions for ${priority.name}`} className="selected-panel-more">
+              <MoreHorizontal size={20} aria-hidden="true" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="focus-context-menu">
+            <DropdownMenuItem className="focus-context-danger" onSelect={onRequestRemove}>
+              <Trash2 size={16} aria-hidden="true" />
+              Remove priority
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <button type="submit" className="flex-1 h-10 rounded-xl border border-white/10 bg-white/5 text-[13px] font-bold text-white hover:bg-white/10 transition-colors">
           Save Name
         </button>
@@ -1184,6 +1376,9 @@ function SelectedPanel({
           <span>Complete Task</span>
         </button>
       </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
    </form>
   );
 }
@@ -1206,7 +1401,7 @@ function AddPriorityDialog({
 
   return (
     <motion.div
-      className="fixed inset-0 z-50 grid place-items-center p-4 bg-background/60 backdrop-blur-sm"
+      className="add-dialog-overlay fixed inset-0 z-50 grid place-items-center p-4 bg-background/60 backdrop-blur-sm"
       role="presentation"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -1567,6 +1762,7 @@ function OrbComponent({
         <motion.div
           className="orb-screen-visual"
           data-priority-id={priority.id}
+          data-selected={isSelected ? 'true' : 'false'}
           aria-hidden="true"
           style={{
             left: hitX,
@@ -1589,7 +1785,7 @@ function OrbComponent({
             transition={{ type: 'spring', stiffness: 300, damping: 20 }}
           >
             <div className="relative">
-              <div className="absolute -top-3 -right-3 px-2 py-0.5 rounded-full text-[10px] font-bold font-display z-20 text-white backdrop-blur-md" style={{
+              <div className="orb-score-badge absolute -top-3 -right-3 px-2 py-0.5 rounded-full text-[10px] font-bold font-display z-20 text-white backdrop-blur-md" style={{
                 backgroundColor: 'rgba(0,0,0,0.65)',
                 border: `1px solid ${priority.hue}70`,
                 boxShadow: `0 0 10px ${priority.hue}40`,
@@ -1745,13 +1941,60 @@ function FocusGalaxyContainer() {
   const [selectedId, setSelectedId] = useState<string | null>(() => readPriorities()[0]?.id ?? null);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isManageOpen, setIsManageOpen] = useState(false);
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+  const [isMobileViewport, setIsMobileViewport] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches,
+  );
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSelectedPanelExpanded, setIsSelectedPanelExpanded] = useState(false);
   const [panelsOpen, setPanelsOpen] = useState(true);
   const [isZenMode, setIsZenMode] = useState(false);
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [cosmosBrightness, setCosmosBrightness] = useState(100);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const mobileMenuTriggerRef = useRef<HTMLButtonElement>(null);
+  const confirmationOpenerRef = useRef<HTMLElement | null>(null);
   const { toast } = useToast();
   
   const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 767px)');
+    const updateViewport = () => setIsMobileViewport(mediaQuery.matches);
+    mediaQuery.addEventListener('change', updateViewport);
+    updateViewport();
+    return () => mediaQuery.removeEventListener('change', updateViewport);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileMenuOpen || !isMobileViewport) return;
+    const menu = mobileMenuRef.current;
+    const focusFrame = requestAnimationFrame(() => {
+      menu?.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled])')?.focus({ preventScroll: true });
+    });
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && (menu?.contains(target) || mobileMenuTriggerRef.current?.contains(target))) return;
+      setIsMobileMenuOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setIsMobileMenuOpen(false);
+      mobileMenuTriggerRef.current?.focus({ preventScroll: true });
+    };
+    window.addEventListener('pointerdown', closeOnOutsidePointer);
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      cancelAnimationFrame(focusFrame);
+      window.removeEventListener('pointerdown', closeOnOutsidePointer);
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [isMobileMenuOpen, isMobileViewport]);
+
+  useEffect(() => {
+    if (!isMobileViewport) setIsMobileMenuOpen(false);
+  }, [isMobileViewport]);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(priorities));
@@ -1796,8 +2039,27 @@ function FocusGalaxyContainer() {
     if (selectedId === id) setSelectedId(null);
   };
 
+  const openConfirmation = (nextConfirmation: Confirmation) => {
+    confirmationOpenerRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    setConfirmation(nextConfirmation);
+  };
+
+  const requestRemovePriority = (id: string) => {
+    const priority = priorities.find((item) => item.id === id);
+    if (!priority) return;
+    openConfirmation({
+      title: `Remove ${priority.name}?`,
+      description: 'This priority will leave your galaxy. You can add it again at any time.',
+      confirmLabel: 'Remove Priority',
+      onConfirm: () => removePriority(id),
+    });
+  };
+
   const selectPriority = (id: string) => {
     setSelectedId(id);
+    setIsSelectedPanelExpanded(false);
     setPanelsOpen(true);
     const p = priorities.find(x => x.id === id);
     if (p) playCosmicChime(440 + p.urgency * 35);
@@ -1818,23 +2080,30 @@ function FocusGalaxyContainer() {
     }, 650);
   };
 
-  const resetPriorities = () => {
-    if (window.confirm('Restore initial demo priorities?')) {
-      setPriorities(seedPriorities);
-      setSelectedId(null);
-      toast({
-        title: "Galaxy Reset",
-        description: "Initial solar priorities restored.",
-      });
-    }
+  const requestResetPriorities = () => {
+    openConfirmation({
+      title: 'Reset your galaxy?',
+      description: 'Restore the original priorities and remove your changes.',
+      confirmLabel: 'Reset Galaxy',
+      onConfirm: () => {
+        setPriorities(seedPriorities);
+        setSelectedId(null);
+        setIsSelectedPanelExpanded(false);
+        setIsMobileMenuOpen(false);
+        toast({
+          title: "Galaxy Reset",
+          description: "Initial solar priorities restored.",
+        });
+      },
+    });
   };
 
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target instanceof HTMLElement ? e.target : null;
-      if (isAddOpen || isManageOpen) return;
-      if (target?.closest('[role="tablist"], [role="dialog"]')) return;
+      if (isAddOpen || isManageOpen || confirmation || isMobileMenuOpen) return;
+      if (target?.closest('[role="tablist"], [role="dialog"], [role="alertdialog"]')) return;
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName ?? '')) return;
       if (e.key === 'Escape') {
         setSelectedId(null);
@@ -1867,7 +2136,7 @@ function FocusGalaxyContainer() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [priorities, selectedId, isAddOpen, isManageOpen]);
+  }, [priorities, selectedId, isAddOpen, isManageOpen, confirmation, isMobileMenuOpen]);
 
   const rankedPriorities = useMemo(
     () => [...priorities].sort((a, b) => getFocusScore(b) - getFocusScore(a)),
@@ -1917,7 +2186,7 @@ function FocusGalaxyContainer() {
 
   return (
     <div 
-      className={`focus-galaxy-app relative w-full h-[100dvh] overflow-hidden bg-background select-none ${isZenMode ? 'zen-mode' : ''}`}
+      className={`focus-galaxy-app relative w-full h-[100dvh] overflow-hidden bg-background select-none ${isZenMode ? 'zen-mode' : ''}${isMobileViewport && isSelectedPanelExpanded ? ' mobile-detail-expanded' : ''}`}
       style={cosmosVisualStyle}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
@@ -1956,23 +2225,48 @@ function FocusGalaxyContainer() {
           
           <div className="header-actions flex flex-col md:flex-row items-center gap-3 pointer-events-auto">
             <button onClick={() => setIsAddOpen(true)} aria-label="Add priority" className="header-add flex items-center gap-2 px-5 py-2 rounded-full border border-primary/50 bg-primary/20 hover:bg-primary/30 text-white text-xs font-bold transition-colors shadow-[0_0_15px_rgba(155,91,228,0.3)]">
-              <Plus size={14} strokeWidth={3} /> Add Priority
+              <Plus size={14} strokeWidth={3} /> <span className="header-add-label">Add Priority</span>
             </button>
 
-            <div className="header-utilities flex items-center gap-2">
-              <FocusAudio />
+            <div
+              id="mobile-galaxy-controls"
+              ref={mobileMenuRef}
+              className={`header-utilities flex items-center gap-2${isMobileMenuOpen ? ' is-open' : ''}`}
+              role="group"
+              aria-label="Galaxy controls"
+            >
+              <div className="mobile-control-section">
+                <span className="mobile-control-heading">Sound & atmosphere</span>
+                <FocusAudio />
+                <CosmosBrightnessControl value={cosmosBrightness} onChange={setCosmosBrightness} />
+              </div>
 
-              <CosmosBrightnessControl value={cosmosBrightness} onChange={setCosmosBrightness} />
+              <div className="mobile-control-actions">
+                <button onClick={() => { setIsMobileMenuOpen(false); setIsManageOpen(true); }} aria-label="Manage priorities" className="header-manage flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-xs font-bold transition-colors">
+                  <ListChecks size={16} />
+                  <span className="header-manage-label">Manage</span>
+                  <span className="mobile-control-label">Manage priorities</span>
+                </button>
 
-              <button onClick={() => setIsManageOpen(true)} aria-label="Manage priorities" className="header-manage flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-xs font-bold transition-colors">
-                <ListChecks size={15} />
-                <span className="header-manage-label">Manage</span>
-              </button>
-
-              <button onClick={resetPriorities} className="header-reset w-10 h-10 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors shadow-[0_4px_10px_rgba(0,0,0,0.5)]" aria-label="Reset priorities">
-                <RotateCcw size={15} />
-              </button>
+                <button onClick={() => { setIsMobileMenuOpen(false); requestResetPriorities(); }} className="header-reset w-10 h-10 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors shadow-[0_4px_10px_rgba(0,0,0,0.5)]" aria-label="Reset priorities">
+                  <RotateCcw size={16} />
+                  <span className="mobile-control-label">Reset galaxy</span>
+                </button>
+              </div>
             </div>
+
+            <button
+              ref={mobileMenuTriggerRef}
+              type="button"
+              id="mobile-galaxy-controls-trigger"
+              className="mobile-overflow-button"
+              aria-label={isMobileMenuOpen ? 'Close galaxy controls' : 'Open galaxy controls'}
+              aria-controls="mobile-galaxy-controls"
+              aria-expanded={isMobileMenuOpen}
+              onClick={() => setIsMobileMenuOpen((open) => !open)}
+            >
+              <MoreHorizontal size={21} aria-hidden="true" />
+            </button>
           </div>
         </div>
       </header>
@@ -2030,7 +2324,7 @@ function FocusGalaxyContainer() {
       <motion.div
         className="insight-dock absolute bottom-28 left-6 right-6 flex flex-col xl:flex-row items-end xl:items-end justify-center gap-8 z-20 pointer-events-none"
         animate={{ y: (panelsOpen && !isZenMode) ? 0 : 320 }}
-        transition={{ type: 'spring', stiffness: 180, damping: 24 }}
+        transition={prefersReducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 180, damping: 24 }}
       >
         <button
           type="button"
@@ -2065,10 +2359,10 @@ function FocusGalaxyContainer() {
             <div key={selectedPriority.id} className="panel-slot panel-slot-selected w-full xl:w-[min(30vw,400px)] shrink-0 transform-gpu transition-all duration-500">
               <motion.div
                 className="h-full"
-                initial={{ opacity: 0, y: 18, scale: 0.98 }}
+                initial={prefersReducedMotion ? false : { opacity: 0, y: 18, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 18, scale: 0.98 }}
-                transition={{ type: 'spring', stiffness: 220, damping: 24 }}
+                exit={prefersReducedMotion ? undefined : { opacity: 0, y: 18, scale: 0.98 }}
+                transition={prefersReducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 220, damping: 24 }}
               >
                 <SelectedPanel
                   priority={selectedPriority}
@@ -2076,7 +2370,11 @@ function FocusGalaxyContainer() {
                   onRename={(name) => renamePriority(selectedPriority.id, name)}
                   onComplete={() => completePriority(selectedPriority.id)}
                   onClose={() => setSelectedId(null)}
-                  onRemove={() => removePriority(selectedPriority.id)}
+                  onRequestRemove={() => requestRemovePriority(selectedPriority.id)}
+                  isMobile={isMobileViewport}
+                  isExpanded={isSelectedPanelExpanded}
+                  onToggleExpanded={(expanded) => setIsSelectedPanelExpanded(expanded)}
+                  prefersReducedMotion={prefersReducedMotion}
                 />
               </motion.div>
             </div>
@@ -2095,11 +2393,19 @@ function FocusGalaxyContainer() {
           <ManageTasksDialog
             priorities={priorities}
             onClose={() => setIsManageOpen(false)}
-            onSelect={selectPriority}
+            onSelect={(id) => {
+              selectPriority(id);
+              setIsMobileMenuOpen(false);
+            }}
             onRename={renamePriority}
-            onRemove={removePriority}
+            onRequestRemove={requestRemovePriority}
           />
         )}
+        <ConfirmActionDialog
+          confirmation={confirmation}
+          openerRef={confirmationOpenerRef}
+          onClose={() => setConfirmation(null)}
+        />
       </AnimatePresence>
 
       {/* Keyboard Shortcuts and Galaxy Explore Pill */}
@@ -2117,14 +2423,16 @@ function FocusGalaxyContainer() {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Switch>
-          <Route path="/" component={FocusGalaxyContainer} />
-          <Route component={NotFound} />
-        </Switch>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <MotionConfig reducedMotion="user">
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Switch>
+            <Route path="/" component={FocusGalaxyContainer} />
+            <Route component={NotFound} />
+          </Switch>
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </MotionConfig>
   );
 }
