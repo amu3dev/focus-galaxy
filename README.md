@@ -63,13 +63,17 @@ The Worker uses the `workers.dev` subdomain and serves the built single-page app
 
 ## Optional Spotify playback
 
-Spotify playback is opt-in. Create a Spotify Developer app, add the exact URL where Focus Galaxy runs to its Redirect URI allowlist, then set the public client ID in `.env.local`:
+Spotify playback is opt-in. Create a Spotify Developer app and copy its Client ID. For local development, put it in `artifacts/focus-galaxy/.env.local` (the Vite app root):
 
 ```bash
 VITE_SPOTIFY_CLIENT_ID=your_client_id
 ```
 
-The app uses Authorization Code with PKCE, so no Spotify client secret belongs in the frontend. A user must explicitly authorize the app, and browser playback requires Spotify Premium; the built-in generated focus music remains available when Spotify is not configured or supported.
+Restart the dev server after changing the value. For the published Cloudflare Worker, add `VITE_SPOTIFY_CLIENT_ID` under the Worker’s **Settings → Build → Build Variables and Secrets**, then trigger a new build/deploy. It must be present during the Vite build: a runtime-only Worker variable will not change the already-built frontend. The Client ID is public; do not put a Spotify Client Secret in the frontend.
+
+In Spotify Developer Dashboard, add each exact Focus Galaxy address you use (preview and published) to the app's Redirect URIs. For the current published site, add `https://focus-galaxy.amu3dev.workers.dev/`. The callback is the current page's origin plus path, so include the same path and trailing slash. Spotify requires HTTPS except for loopback development addresses, and does not allow `localhost`.
+
+The app uses Authorization Code with PKCE and asks the user to authorize playback and playback-control scopes. In Spotify Development Mode, the app owner needs Premium and each user must be allowlisted; browser playback also requires the listening account to have Premium. After connecting, start a Spotify track on another device if there is no active track for Focus Galaxy to transfer. Built-in generated focus music remains available when Spotify is not configured or supported.
 
 ## Project structure
 
