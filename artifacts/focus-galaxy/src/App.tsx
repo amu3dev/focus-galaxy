@@ -34,8 +34,27 @@ type SpotifySession = {
   refreshToken?: string;
 };
 
+type SpotifyTrack = {
+  name?: string;
+  type?: string;
+  artists?: Array<{ name?: string }>;
+  show?: { name?: string };
+};
+
+type SpotifyTrackSummary = {
+  name: string;
+  byline: string;
+};
+
 type SpotifyPlayerState = {
   paused: boolean;
+  track_window?: {
+    current_track?: SpotifyTrack | null;
+  };
+};
+
+type SpotifyPlaybackSnapshot = {
+  item?: SpotifyTrack | null;
 };
 
 type SpotifyPlayer = {
@@ -61,6 +80,21 @@ type SpotifyWindow = Window & {
 };
 
 let spotifySdkPromise: Promise<SpotifySdk> | null = null;
+
+function getSpotifyTrackSummary(track?: SpotifyTrack | null): SpotifyTrackSummary | null {
+  if (!track) return null;
+  const name = track.name?.trim();
+  if (!name) return null;
+
+  const artists = track.artists
+    ?.map((artist) => artist.name?.trim())
+    .filter((artist): artist is string => Boolean(artist));
+
+  return {
+    name,
+    byline: artists?.join(', ') || track.show?.name?.trim() || '',
+  };
+}
 
 function getSpotifyRedirectUri() {
   return `${window.location.origin}${window.location.pathname}`;
@@ -338,6 +372,7 @@ function FocusAudio() {
   const [audioSource, setAudioSource] = useState<'local' | 'spotify'>('local');
   const [spotifyStatus, setSpotifyStatus] = useState<'unavailable' | 'idle' | 'connecting' | 'ready' | 'playing' | 'error'>(() => spotifyClientId ? 'idle' : 'unavailable');
   const [spotifyIsPlaying, setSpotifyIsPlaying] = useState(false);
+  const [spotifyTrack, setSpotifyTrack] = useState<SpotifyTrackSummary | null>(null);
   const [spotifyMessage, setSpotifyMessage] = useState('');
   const audioRef = useRef<{
     context: AudioContext;
@@ -481,9 +516,11 @@ function FocusAudio() {
       const token = await getSpotifyAccessToken();
       const playerState = await player.getCurrentState();
       if (playerState) {
+        setSpotifyTrack(getSpotifyTrackSummary(playerState.track_window?.current_track));
         if (playerState.paused) await player.togglePlay();
       } else {
-        const current = await spotifyRequest('/me/player', token) as { item?: unknown } | null;
+        const current = await spotifyRequest('/me/player', token) as SpotifyPlaybackSnapshot | null;
+        setSpotifyTrack(getSpotifyTrackSummary(current?.item));
         if (!current?.item) {
           setSpotifyStatus('ready');
           setSpotifyMessage('Start a track in Spotify, then choose Spotify here.');
@@ -534,6 +571,7 @@ function FocusAudio() {
       });
       player.addListener('player_state_changed', (data) => {
         if (typeof data?.paused !== 'boolean') return;
+        setSpotifyTrack(getSpotifyTrackSummary(data.track_window?.current_track));
         setSpotifyIsPlaying(!data.paused);
         setSpotifyStatus(data.paused ? 'ready' : 'playing');
       });
@@ -631,9 +669,19 @@ function FocusAudio() {
   const isSourcePlaying = audioSource === 'spotify' ? spotifyIsPlaying : isPlaying;
   const spotifyLabel = !spotifyClientId
     ? 'Spotify unavailable'
+    : spotifyStatus === 'connecting'
+      ? 'Connecting…'
     : spotifyConnected
-      ? audioSource === 'spotify' ? 'Use local focus music' : 'Use Spotify focus music'
-      : 'Connect Spotify';
+      ? audioSource === 'spotify' ? 'Use local' : 'Use Spotify'
+      : spotifyStatus === 'error' ? 'Retry Spotify' : 'Connect Spotify';
+  const spotifyTrackDescription = spotifyTrack
+    ? `${spotifyTrack.name}${spotifyTrack.byline ? ` — ${spotifyTrack.byline}` : ''}`
+    : '';
+  const spotifyTrackStatus = spotifyIsPlaying ? 'Now playing' : 'Last Spotify track';
+  const spotifyDetail = spotifyTrack?.name || (spotifyConnected ? 'No active track' : '');
+  const spotifyButtonDescription = spotifyTrack
+    ? `${spotifyLabel}. ${spotifyTrackStatus}: ${spotifyTrackDescription}`
+    : [spotifyLabel, spotifyConnected ? 'No active track' : ''].filter(Boolean).join('. ');
 
   return (
     <div className="focus-audio flex items-center rounded-full border border-white/10 bg-white/5 backdrop-blur-md overflow-hidden">
@@ -680,12 +728,15 @@ function FocusAudio() {
         data-testid="spotify-connect"
         onClick={handleSpotifyClick}
         disabled={!spotifyClientId || spotifyStatus === 'connecting'}
-        aria-label={spotifyLabel}
-        title={spotifyMessage || spotifyLabel}
-        className={`flex items-center gap-1.5 border-l border-white/10 px-3 py-2 text-[11px] font-semibold transition-colors ${spotifyConnected && audioSource === 'spotify' ? 'text-[#1ed760]' : 'text-white/60 hover:bg-white/10 hover:text-white'} disabled:cursor-not-allowed disabled:opacity-45`}
+        aria-label={spotifyButtonDescription}
+        title={[spotifyMessage, spotifyButtonDescription].filter(Boolean).join(' ')}
+        className={`flex min-w-0 items-center gap-1.5 border-l border-white/10 px-3 py-2 text-[11px] font-semibold transition-colors ${spotifyConnected && audioSource === 'spotify' ? 'text-[#1ed760]' : 'text-white/60 hover:bg-white/10 hover:text-white'} disabled:cursor-not-allowed disabled:opacity-45`}
       >
         <Music2 size={14} />
-        <span className="hidden sm:inline">Spotify</span>
+        <span className="flex min-w-0 max-w-[96px] flex-col text-left leading-tight">
+          <span className="whitespace-nowrap">{spotifyLabel}</span>
+          {spotifyDetail && <span className="max-w-full truncate text-[9px] font-medium text-white/55">{spotifyDetail}</span>}
+        </span>
       </button>
       <span className="sr-only" role="status" aria-live="polite">{spotifyMessage}</span>
     </div>
