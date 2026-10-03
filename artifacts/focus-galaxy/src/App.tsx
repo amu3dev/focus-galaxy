@@ -25,6 +25,7 @@ import NotFound from '@/pages/not-found';
 import { Route, Switch } from 'wouter';
 import { MotionConfig, motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { PlanetFocusMode, type PlanetFocusOrigin } from '@/components/planet-focus-mode';
+import type { PlanetEntry, PlanetEntryType } from '@/components/planet-content-composer';
 
 type Priority = {
   id: string;
@@ -33,6 +34,8 @@ type Priority = {
   urgency: number;
   energy: number;
   hue: string;
+  entries?: PlanetEntry[];
+  // Read only for migration from the first Planet Focus Mode notes field.
   notes?: string;
 };
 
@@ -349,11 +352,49 @@ function readPriorities(): Priority[] {
   try {
     const saved = window.localStorage.getItem(STORAGE_KEY);
     if (!saved) return seedPriorities;
-    const parsed = JSON.parse(saved) as Priority[];
-    return Array.isArray(parsed) ? parsed : seedPriorities;
+    const parsed: unknown = JSON.parse(saved);
+    if (!Array.isArray(parsed)) return seedPriorities;
+
+    return parsed.flatMap((candidate): Priority[] => {
+      if (!candidate || typeof candidate !== 'object') return [];
+      const priority = candidate as Priority;
+      const savedEntries = Array.isArray(priority.entries)
+        ? priority.entries.filter(isPlanetEntry)
+        : [];
+      const legacyNote = typeof priority.notes === 'string' ? priority.notes : '';
+      const shouldMigrateNote = legacyNote.trim().length > 0
+        && !savedEntries.some((entry) => entry.type === 'note' && entry.text === legacyNote);
+      const { notes: _legacyNotes, ...currentPriority } = priority;
+      const migratedAt = Date.now();
+
+      // The legacy field is removed after this one-time read; the stable ID also
+      // prevents a duplicate if a partially migrated record is encountered.
+      const entries: PlanetEntry[] = shouldMigrateNote
+        ? [{
+            id: `legacy-note-${priority.id}`,
+            type: 'note',
+            text: legacyNote,
+            createdAt: migratedAt,
+            updatedAt: migratedAt,
+          }, ...savedEntries]
+        : savedEntries;
+
+      return [{ ...currentPriority, entries }];
+    });
   } catch {
     return seedPriorities;
   }
+}
+
+function isPlanetEntry(value: unknown): value is PlanetEntry {
+  if (!value || typeof value !== 'object') return false;
+  const entry = value as PlanetEntry;
+  const hasCommonFields = typeof entry.id === 'string'
+    && typeof entry.text === 'string'
+    && Number.isFinite(entry.createdAt)
+    && Number.isFinite(entry.updatedAt);
+  if (!hasCommonFields) return false;
+  return entry.type === 'note' || (entry.type === 'task' && typeof entry.completed === 'boolean');
 }
 
 function useParallax() {
@@ -2062,8 +2103,42 @@ function FocusGalaxyContainer() {
     setPriorities(prev => prev.map(p => p.id === id ? { ...p, [metric]: val } : p));
   };
 
-  const updatePriorityNotes = (id: string, notes: string) => {
-    setPriorities(prev => prev.map(p => p.id === id ? { ...p, notes } : p));
+  const createPlanetEntry = (id: string, type: PlanetEntryType, text: string) => {
+    const now = Date.now();
+    const entry: PlanetEntry = type === 'note'
+      ? { id: crypto.randomUUID(), type, text, createdAt: now, updatedAt: now }
+      : { id: crypto.randomUUID(), type, text, completed: false, createdAt: now, updatedAt: now };
+    setPriorities(prev => prev.map(priority => priority.id === id
+      ? { ...priority, entries: [...(priority.entries ?? []), entry] }
+      : priority));
+  };
+
+  const savePlanetEntry = (priorityId: string, entryId: string, text: string) => {
+    const updatedAt = Date.now();
+    setPriorities(prev => prev.map(priority => priority.id === priorityId
+      ? {
+          ...priority,
+          entries: (priority.entries ?? []).map(entry => entry.id === entryId ? { ...entry, text, updatedAt } : entry),
+        }
+      : priority));
+  };
+
+  const togglePlanetTask = (priorityId: string, entryId: string) => {
+    const updatedAt = Date.now();
+    setPriorities(prev => prev.map(priority => priority.id === priorityId
+      ? {
+          ...priority,
+          entries: (priority.entries ?? []).map(entry => entry.id === entryId && entry.type === 'task'
+            ? { ...entry, completed: !entry.completed, updatedAt }
+            : entry),
+        }
+      : priority));
+  };
+
+  const deletePlanetEntry = (priorityId: string, entryId: string) => {
+    setPriorities(prev => prev.map(priority => priority.id === priorityId
+      ? { ...priority, entries: (priority.entries ?? []).filter(entry => entry.id !== entryId) }
+      : priority));
   };
   
   const renamePriority = (id: string, name: string) => {
@@ -2465,7 +2540,10 @@ function FocusGalaxyContainer() {
           score={getFocusScore(focusPriority)}
           origin={focusSession.origin}
           prefersReducedMotion={prefersReducedMotion}
-          onUpdateNotes={(notes) => updatePriorityNotes(focusPriority.id, notes)}
+          onCreateEntry={(type, text) => createPlanetEntry(focusPriority.id, type, text)}
+          onSaveEntry={(entryId, text) => savePlanetEntry(focusPriority.id, entryId, text)}
+          onToggleTask={(entryId) => togglePlanetTask(focusPriority.id, entryId)}
+          onDeleteEntry={(entryId) => deletePlanetEntry(focusPriority.id, entryId)}
           onClose={() => {
             const opener = focusSession.opener;
             galaxyAppRef.current?.removeAttribute('inert');

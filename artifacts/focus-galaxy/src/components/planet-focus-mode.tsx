@@ -1,6 +1,7 @@
-import { useLayoutEffect, useRef, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { motion, useAnimationControls } from 'framer-motion';
+import { PlanetContentComposer, type PlanetEntry, type PlanetEntryType } from '@/components/planet-content-composer';
 
 export type PlanetFocusPriority = {
   id: string;
@@ -9,7 +10,7 @@ export type PlanetFocusPriority = {
   urgency: number;
   energy: number;
   hue: string;
-  notes?: string;
+  entries?: PlanetEntry[];
 };
 
 export type PlanetFocusOrigin = {
@@ -29,7 +30,10 @@ type PlanetFocusModeProps = {
   score: number;
   origin: PlanetFocusOrigin | null;
   prefersReducedMotion: boolean;
-  onUpdateNotes: (notes: string) => void;
+  onCreateEntry: (type: PlanetEntryType, text: string) => void;
+  onSaveEntry: (id: string, text: string) => void;
+  onToggleTask: (id: string) => void;
+  onDeleteEntry: (id: string) => void;
   onClose: () => void;
 };
 
@@ -43,13 +47,22 @@ export function PlanetFocusMode({
   score,
   origin,
   prefersReducedMotion,
-  onUpdateNotes,
+  onCreateEntry,
+  onSaveEntry,
+  onToggleTask,
+  onDeleteEntry,
   onClose,
 }: PlanetFocusModeProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
   const returnFlight = useRef({ x: 0, y: 0, scale: 1 });
   const closing = useRef(false);
+  const [hasUnsavedContent, setHasUnsavedContent] = useState(false);
+  const [showExitPrompt, setShowExitPrompt] = useState(false);
+  const hasUnsavedContentRef = useRef(false);
+  const showExitPromptRef = useRef(false);
+  hasUnsavedContentRef.current = hasUnsavedContent;
+  showExitPromptRef.current = showExitPrompt;
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   const sceneAnimation = useAnimationControls();
@@ -107,7 +120,8 @@ export function PlanetFocusMode({
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
-        void requestClose();
+        if (showExitPromptRef.current) setShowExitPrompt(false);
+        else void requestClose();
         return;
       }
       if (event.key !== 'Tab') return;
@@ -139,8 +153,16 @@ export function PlanetFocusMode({
     };
   }, []);
 
-  const requestClose = async () => {
+  useEffect(() => {
+    if (!hasUnsavedContent) setShowExitPrompt(false);
+  }, [hasUnsavedContent]);
+
+  const requestClose = async (discardUnsaved = false) => {
     if (closing.current) return;
+    if (hasUnsavedContentRef.current && !discardUnsaved) {
+      setShowExitPrompt(true);
+      return;
+    }
     closing.current = true;
     const returnToOrigin = origin && !prefersReducedMotion
       ? { ...returnFlight.current, opacity: 0.94 }
@@ -178,12 +200,22 @@ export function PlanetFocusMode({
     >
       <div className="planet-focus-nebula" aria-hidden="true" />
       <div className="planet-focus-topbar">
-        <button type="button" className="planet-focus-back" onClick={() => void requestClose()}>
+        <button type="button" className="planet-focus-back" aria-label="Return to galaxy" onClick={() => void requestClose()}>
           <ArrowLeft size={17} aria-hidden="true" />
           <span>Back to galaxy</span>
         </button>
         <span className="planet-focus-location"><i aria-hidden="true" /> PLANET FOCUS</span>
       </div>
+
+      {showExitPrompt && (
+        <aside className="planet-focus-exit-prompt" role="alert" aria-live="assertive">
+          <p>You have unsaved content. Save it or discard it before returning to the galaxy.</p>
+          <div>
+            <button type="button" onClick={() => setShowExitPrompt(false)}>Keep editing</button>
+            <button type="button" className="planet-focus-discard" onClick={() => void requestClose(true)}>Discard and leave</button>
+          </div>
+        </aside>
+      )}
 
       <div className="planet-focus-layout">
         <section className="planet-focus-hero" aria-label={`${priority.name} planet`}>
@@ -229,24 +261,16 @@ export function PlanetFocusMode({
             ))}
           </section>
 
-          <section className="planet-focus-notes">
-            <div className="planet-focus-notes-heading">
-              <div>
-                <label htmlFor={`planet-notes-${priority.id}`}>Notes in orbit</label>
-                <p>Keep the thinking that belongs to this priority close.</p>
-              </div>
-              <span aria-hidden="true">{(priority.notes ?? '').length}/2000</span>
-            </div>
-            <textarea
-              id={`planet-notes-${priority.id}`}
-              aria-label={`Notes for ${priority.name}`}
-              value={priority.notes ?? ''}
-              maxLength={2000}
-              placeholder="A thought, a constraint, or the next thing to remember…"
-              onChange={(event) => onUpdateNotes(event.target.value)}
-              spellCheck
-            />
-          </section>
+          <PlanetContentComposer
+            planetId={priority.id}
+            planetName={priority.name}
+            entries={priority.entries ?? []}
+            onCreateEntry={onCreateEntry}
+            onSaveEntry={onSaveEntry}
+            onToggleTask={onToggleTask}
+            onDeleteEntry={onDeleteEntry}
+            onDraftStateChange={setHasUnsavedContent}
+          />
         </div>
       </div>
     </motion.div>
