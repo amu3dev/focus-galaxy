@@ -21,6 +21,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import NotFound from '@/pages/not-found';
 import { Route, Switch } from 'wouter';
 import { MotionConfig, motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
@@ -46,6 +54,7 @@ type Confirmation = {
 };
 
 const STORAGE_KEY = 'focus-galaxy-priorities-v2';
+const MOBILE_VIEWPORT_QUERY = '(max-width: 767px), (max-width: 1024px) and (max-height: 560px)';
 const SPOTIFY_SESSION_KEY = 'focus-galaxy-spotify-session';
 const SPOTIFY_VERIFIER_KEY = 'focus-galaxy-spotify-verifier';
 const SPOTIFY_STATE_KEY = 'focus-galaxy-spotify-state';
@@ -817,16 +826,20 @@ function FocusSignalPanel({
   onRename,
   color,
   summary,
+  presentation = 'desktop',
 }: {
   rankedPriorities: Priority[];
   onSelect: (id: string) => void;
   onRename: (id: string, name: string) => void;
   color: string;
   summary: string;
+  presentation?: 'desktop' | 'mobile';
 }) {
+  const isMobilePresentation = presentation === 'mobile';
+
   return (
     <div 
-      className="panel-card flex flex-col h-full z-20 pointer-events-auto"
+      className={`panel-card focus-signal-card flex flex-col h-full z-20 pointer-events-auto${isMobilePresentation ? ' mobile-insight-card' : ''}`}
       style={{
         '--panel-glow': `${color}30`,
         '--panel-glow-inset': `${color}10`,
@@ -835,38 +848,56 @@ function FocusSignalPanel({
     >
       <div className="flex items-center gap-2 mb-3">
         <Target className="text-white" size={18} />
-        <h3 className="font-sans font-bold text-[16px] text-white tracking-wide">Focus Signal</h3>
+        <h3 className="font-sans font-bold text-[16px] text-white tracking-wide">{isMobilePresentation ? 'Ranked priorities' : 'Focus Signal'}</h3>
       </div>
-      <p className="text-[13px] text-white/60 mb-6 leading-relaxed">
+      <p className="focus-signal-summary text-[13px] text-white/60 mb-6 leading-relaxed">
         {summary}
       </p>
       
-      <div data-testid="focus-signal-list" className="focus-signal-list flex flex-col gap-1 mt-auto">
+      <div data-testid="focus-signal-list" className={`focus-signal-list flex flex-col gap-1 mt-auto${isMobilePresentation ? ' mobile-focus-signal-list' : ''}`}>
          {rankedPriorities.map((p, i) => (
-           <div key={p.id} className="flex items-center gap-3 group w-full">
-            <span className="text-white/40 text-[11px] font-display w-3 text-left font-bold">{i + 1}</span>
-            <div className="w-3 h-3 rounded-full shadow-[0_0_8px_var(--c)]" style={{ '--c': p.hue, backgroundColor: p.hue } as any} />
-             <input
-               key={p.name}
-               defaultValue={p.name}
-               aria-label={`Rename ${p.name}`}
-               maxLength={40}
-               onFocus={() => onSelect(p.id)}
-               onBlur={(event) => {
-                 const nextName = event.currentTarget.value.trim();
-                 if (nextName) onRename(p.id, nextName);
-                 else event.currentTarget.value = p.name;
-               }}
-               onKeyDown={(event) => {
-                 if (event.key === 'Enter') event.currentTarget.blur();
-               }}
-               className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-1 -ml-1 text-[13px] font-semibold text-white/80 outline-none transition-colors hover:border-white/10 hover:text-white focus:border-white/20 focus:bg-white/5 focus:text-white"
-             />
-            <div className="w-16 lg:w-20 h-[6px] bg-white/10 rounded-full overflow-hidden flex-shrink-0">
-               <div className="h-full rounded-full" style={{ width: `${getFocusScore(p)}%`, backgroundColor: p.hue, boxShadow: `0 0 10px ${p.hue}` }} />
-            </div>
-            <span className="text-[13px] font-sans font-bold w-6 text-right text-white">{getFocusScore(p)}</span>
-           </div>
+           isMobilePresentation ? (
+             <button
+               key={p.id}
+               type="button"
+               className="mobile-focus-signal-row"
+               onClick={() => onSelect(p.id)}
+               aria-label={`Select ${p.name}, rank ${i + 1}, focus score ${getFocusScore(p)}`}
+             >
+               <span className="mobile-focus-signal-rank">{i + 1}</span>
+               <span className="mobile-focus-signal-dot" style={{ '--priority-hue': p.hue } as CSSProperties} aria-hidden="true" />
+               <span className="mobile-focus-signal-copy">
+                 <span className="mobile-focus-signal-name">{p.name}</span>
+                 <span className="mobile-focus-signal-bar" aria-hidden="true"><span style={{ width: `${getFocusScore(p)}%`, backgroundColor: p.hue }} /></span>
+               </span>
+               <span className="mobile-focus-signal-score"><small>Score</small><strong>{getFocusScore(p)}</strong></span>
+             </button>
+           ) : (
+             <div key={p.id} className="flex items-center gap-3 group w-full">
+              <span className="text-white/40 text-[11px] font-display w-3 text-left font-bold">{i + 1}</span>
+              <div className="w-3 h-3 rounded-full shadow-[0_0_8px_var(--c)]" style={{ '--c': p.hue, backgroundColor: p.hue } as any} />
+               <input
+                 key={p.name}
+                 defaultValue={p.name}
+                 aria-label={`Rename ${p.name}`}
+                 maxLength={40}
+                 onFocus={() => onSelect(p.id)}
+                 onBlur={(event) => {
+                   const nextName = event.currentTarget.value.trim();
+                   if (nextName) onRename(p.id, nextName);
+                   else event.currentTarget.value = p.name;
+                 }}
+                 onKeyDown={(event) => {
+                   if (event.key === 'Enter') event.currentTarget.blur();
+                 }}
+                 className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-1 -ml-1 text-[13px] font-semibold text-white/80 outline-none transition-colors hover:border-white/10 hover:text-white focus:border-white/20 focus:bg-white/5 focus:text-white"
+               />
+              <div className="w-16 lg:w-20 h-[6px] bg-white/10 rounded-full overflow-hidden flex-shrink-0">
+                 <div className="h-full rounded-full" style={{ width: `${getFocusScore(p)}%`, backgroundColor: p.hue, boxShadow: `0 0 10px ${p.hue}` }} />
+              </div>
+              <span className="text-[13px] font-sans font-bold w-6 text-right text-white">{getFocusScore(p)}</span>
+             </div>
+           )
         ))}
       </div>
     </div>
@@ -1127,12 +1158,13 @@ function ConfirmActionDialog({
   );
 }
 
-function InsightPanel({ insight, title, priority }: { insight: string, title: string, priority?: Priority }) {
+function InsightPanel({ insight, title, priority, presentation = 'desktop' }: { insight: string, title: string, priority?: Priority, presentation?: 'desktop' | 'mobile' }) {
   const color = priority?.hue || '#9b5be4';
+  const isMobilePresentation = presentation === 'mobile';
   
   return (
     <div 
-      className="panel-card flex flex-col items-center justify-center text-center relative overflow-hidden min-h-[240px] z-20 pointer-events-auto"
+      className={`panel-card insight-card flex flex-col items-center justify-center text-center relative overflow-hidden min-h-[240px] z-20 pointer-events-auto${isMobilePresentation ? ' mobile-insight-card mobile-context-insight' : ''}`}
       style={{
         '--panel-glow': `${color}30`,
         '--panel-glow-inset': `${color}10`,
@@ -1961,9 +1993,11 @@ function FocusGalaxyContainer() {
   const [isManageOpen, setIsManageOpen] = useState(false);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [isMobileViewport, setIsMobileViewport] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches,
+    () => typeof window !== 'undefined' && window.matchMedia(MOBILE_VIEWPORT_QUERY).matches,
   );
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMobileInsightsOpen, setIsMobileInsightsOpen] = useState(false);
+  const [mobileInsightTab, setMobileInsightTab] = useState<'signal' | 'context'>('signal');
   const [isSelectedPanelExpanded, setIsSelectedPanelExpanded] = useState(false);
   const [focusSession, setFocusSession] = useState<{
     priorityId: string;
@@ -1984,7 +2018,7 @@ function FocusGalaxyContainer() {
   const isPlanetFocusOpen = focusSession !== null;
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia('(max-width: 767px)');
+    const mediaQuery = window.matchMedia(MOBILE_VIEWPORT_QUERY);
     const updateViewport = () => setIsMobileViewport(mediaQuery.matches);
     mediaQuery.addEventListener('change', updateViewport);
     updateViewport();
@@ -2019,6 +2053,10 @@ function FocusGalaxyContainer() {
 
   useEffect(() => {
     if (!isMobileViewport) setIsMobileMenuOpen(false);
+  }, [isMobileViewport]);
+
+  useEffect(() => {
+    if (!isMobileViewport) setIsMobileInsightsOpen(false);
   }, [isMobileViewport]);
 
   useEffect(() => {
@@ -2096,12 +2134,14 @@ function FocusGalaxyContainer() {
   const selectPriority = (id: string) => {
     setSelectedId(id);
     setIsSelectedPanelExpanded(false);
+    setIsMobileInsightsOpen(false);
     setPanelsOpen(true);
     const p = priorities.find(x => x.id === id);
     if (p) playCosmicChime(440 + p.urgency * 35);
   };
 
   const enterPlanetFocus = (id: string, opener: HTMLElement) => {
+    setIsMobileInsightsOpen(false);
     const visual = Array.from(document.querySelectorAll<HTMLElement>('.orb-screen-visual[data-priority-id]'))
       .find((element) => element.dataset.priorityId === id);
     const rect = visual?.getBoundingClientRect();
@@ -2234,7 +2274,7 @@ function FocusGalaxyContainer() {
   return (
     <div 
       ref={galaxyAppRef}
-      className={`focus-galaxy-app relative w-full h-[100dvh] overflow-hidden bg-background select-none ${isZenMode ? 'zen-mode' : ''}${isMobileViewport && isSelectedPanelExpanded ? ' mobile-detail-expanded' : ''}`}
+      className={`focus-galaxy-app relative w-full h-[100dvh] overflow-hidden bg-background select-none${isMobileViewport ? ' mobile-ui-viewport' : ''} ${isZenMode ? 'zen-mode' : ''}${isMobileViewport && isSelectedPanelExpanded ? ' mobile-detail-expanded' : ''}`}
       style={cosmosVisualStyle}
       aria-hidden={isPlanetFocusOpen}
       onMouseMove={handleMouseMove}
@@ -2319,6 +2359,82 @@ function FocusGalaxyContainer() {
           </div>
         </div>
       </header>
+
+      {isMobileViewport && (
+        <Sheet
+          open={isMobileInsightsOpen}
+          onOpenChange={(open) => {
+            setIsMobileInsightsOpen(open);
+            if (open) setIsMobileMenuOpen(false);
+          }}
+        >
+          <div className="mobile-insights-trigger-slot">
+            <SheetTrigger asChild>
+              <button
+                type="button"
+                className="mobile-insights-trigger"
+                aria-label={isMobileInsightsOpen ? 'Close Galaxy insights' : 'Open Galaxy insights'}
+                aria-controls="mobile-galaxy-insights"
+                aria-expanded={isMobileInsightsOpen}
+              >
+                <Activity size={16} aria-hidden="true" />
+                <span>Insights</span>
+                <ChevronDown size={14} className="mobile-insights-trigger-cue" aria-hidden="true" />
+              </button>
+            </SheetTrigger>
+          </div>
+          <SheetContent
+            side="bottom"
+            id="mobile-galaxy-insights"
+            className={`mobile-insights-sheet${mobileInsightTab === 'context' ? ' is-context-active' : ''}`}
+            overlayClassName="mobile-insights-overlay"
+          >
+            <div className="mobile-insights-grabber" aria-hidden="true" />
+            <div className="mobile-insights-heading">
+              <div>
+                <SheetTitle className="mobile-insights-title">Galaxy insights</SheetTitle>
+                <SheetDescription className="mobile-insights-description">
+                  A closer look at what is drawing your focus.
+                </SheetDescription>
+              </div>
+            </div>
+            <Tabs
+              value={mobileInsightTab}
+              onValueChange={(value) => setMobileInsightTab(value === 'context' ? 'context' : 'signal')}
+              className="mobile-insights-tabs"
+            >
+              <TabsList className="mobile-insights-tab-list" aria-label="Galaxy insight views">
+                <TabsTrigger value="signal" className="mobile-insights-tab">
+                  <Target size={15} aria-hidden="true" />
+                  <span>Focus Signal</span>
+                </TabsTrigger>
+                <TabsTrigger value="context" className="mobile-insights-tab">
+                  <Activity size={15} aria-hidden="true" />
+                  <span>Current insight</span>
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="signal" className="mobile-insights-panel" aria-label="Focus Signal">
+                <FocusSignalPanel
+                  rankedPriorities={rankedPriorities}
+                  onSelect={selectPriority}
+                  onRename={renamePriority}
+                  color={topPriorities[0]?.hue || '#9b5be4'}
+                  summary={getSignalSummary(topPriorities)}
+                  presentation="mobile"
+                />
+              </TabsContent>
+              <TabsContent value="context" className="mobile-insights-panel" aria-label="Current galaxy insight">
+                <InsightPanel
+                  insight={insight}
+                  title={insightTitle}
+                  priority={selectedPriority || topPriorities[0]}
+                  presentation="mobile"
+                />
+              </TabsContent>
+            </Tabs>
+          </SheetContent>
+        </Sheet>
+      )}
 
       <div id="orb-hit-layer" className="orb-hit-layer absolute inset-0 pointer-events-none" />
 
@@ -2405,7 +2521,7 @@ function FocusGalaxyContainer() {
         </div>
         
         <AnimatePresence initial={false} mode="popLayout">
-          {selectedPriority && (
+          {selectedPriority && !(isMobileViewport && isMobileInsightsOpen) && (
             <div key={selectedPriority.id} className="panel-slot panel-slot-selected w-full xl:w-[min(30vw,400px)] shrink-0 transform-gpu transition-all duration-500">
               <motion.div
                 className="h-full"
