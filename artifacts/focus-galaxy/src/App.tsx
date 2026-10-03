@@ -24,6 +24,7 @@ import {
 import NotFound from '@/pages/not-found';
 import { Route, Switch } from 'wouter';
 import { MotionConfig, motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
+import { PlanetFocusMode, type PlanetFocusOrigin } from '@/components/planet-focus-mode';
 
 type Priority = {
   id: string;
@@ -32,6 +33,7 @@ type Priority = {
   urgency: number;
   energy: number;
   hue: string;
+  notes?: string;
 };
 
 type MetricKey = 'importance' | 'urgency' | 'energy';
@@ -1163,6 +1165,7 @@ function SelectedPanel({
   onRename,
   onComplete,
   onClose,
+  onEnterFocus,
   onRequestRemove,
   isMobile,
   isExpanded,
@@ -1174,6 +1177,7 @@ function SelectedPanel({
   onRename: (name: string) => void;
   onComplete: () => void;
   onClose: () => void;
+  onEnterFocus: (opener: HTMLButtonElement) => void;
   onRequestRemove: () => void;
   isMobile: boolean;
   isExpanded: boolean;
@@ -1281,9 +1285,21 @@ function SelectedPanel({
             )}
           </div>
         </div>
-        <button type="button" onClick={onClose} className="selected-panel-close text-white/40 hover:text-white transition-colors p-1" aria-label="Close panel">
-           <X size={18} />
-        </button>
+        <div className="selected-panel-header-actions">
+          <button
+            type="button"
+            onClick={(event) => onEnterFocus(event.currentTarget)}
+            className="selected-panel-focus"
+            aria-label={`Enter Focus Mode for ${priority.name}`}
+            title={`Enter Focus Mode for ${priority.name}`}
+          >
+            <Orbit size={16} aria-hidden="true" />
+            <span>Enter Focus</span>
+          </button>
+          <button type="button" onClick={onClose} className="selected-panel-close text-white/40 hover:text-white transition-colors p-1" aria-label="Close panel">
+             <X size={18} />
+          </button>
+        </div>
       </div>
 
       <AnimatePresence initial={false}>
@@ -1583,6 +1599,7 @@ function OrbComponent({
   selectedId,
   onSelect,
   isCompleting,
+  isFocusModeOpen,
   prefersReducedMotion 
 }: { 
   priority: Priority; 
@@ -1590,6 +1607,7 @@ function OrbComponent({
   selectedId: string | null;
   onSelect: (id: string) => void;
   isCompleting: boolean;
+  isFocusModeOpen: boolean;
   prefersReducedMotion: boolean;
 }) {
   const isSelected = selectedId === priority.id;
@@ -1618,7 +1636,7 @@ function OrbComponent({
 
   // Continuous physics loop: accumulated delta time guarantees zero snapping or resets
   useEffect(() => {
-    if (prefersReducedMotion) return;
+    if (prefersReducedMotion || isFocusModeOpen) return;
     let lastTime = performance.now();
     let animId: number;
     const tick = (now: number) => {
@@ -1634,7 +1652,7 @@ function OrbComponent({
     };
     animId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(animId);
-  }, [prefersReducedMotion, isHovered, isSelected, urgencySpring, drift]);
+  }, [prefersReducedMotion, isFocusModeOpen, isHovered, isSelected, urgencySpring, drift]);
 
   useEffect(() => {
     let frame = 0;
@@ -1947,16 +1965,23 @@ function FocusGalaxyContainer() {
   );
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSelectedPanelExpanded, setIsSelectedPanelExpanded] = useState(false);
+  const [focusSession, setFocusSession] = useState<{
+    priorityId: string;
+    origin: PlanetFocusOrigin | null;
+    opener: HTMLElement | null;
+  } | null>(null);
   const [panelsOpen, setPanelsOpen] = useState(true);
   const [isZenMode, setIsZenMode] = useState(false);
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [cosmosBrightness, setCosmosBrightness] = useState(100);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const galaxyAppRef = useRef<HTMLDivElement>(null);
   const mobileMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const confirmationOpenerRef = useRef<HTMLElement | null>(null);
   const { toast } = useToast();
   
   const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const isPlanetFocusOpen = focusSession !== null;
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 767px)');
@@ -1999,6 +2024,13 @@ function FocusGalaxyContainer() {
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(priorities));
   }, [priorities]);
+
+  useEffect(() => {
+    const galaxy = galaxyAppRef.current;
+    if (!galaxy) return;
+    if (isPlanetFocusOpen) galaxy.setAttribute('inert', '');
+    else galaxy.removeAttribute('inert');
+  }, [isPlanetFocusOpen]);
   
   useEffect(() => {
     if (selectedId && !priorities.some(p => p.id === selectedId)) {
@@ -2028,6 +2060,10 @@ function FocusGalaxyContainer() {
 
   const updatePriority = (id: string, metric: MetricKey, val: number) => {
     setPriorities(prev => prev.map(p => p.id === id ? { ...p, [metric]: val } : p));
+  };
+
+  const updatePriorityNotes = (id: string, notes: string) => {
+    setPriorities(prev => prev.map(p => p.id === id ? { ...p, notes } : p));
   };
   
   const renamePriority = (id: string, name: string) => {
@@ -2063,6 +2099,16 @@ function FocusGalaxyContainer() {
     setPanelsOpen(true);
     const p = priorities.find(x => x.id === id);
     if (p) playCosmicChime(440 + p.urgency * 35);
+  };
+
+  const enterPlanetFocus = (id: string, opener: HTMLElement) => {
+    const visual = Array.from(document.querySelectorAll<HTMLElement>('.orb-screen-visual[data-priority-id]'))
+      .find((element) => element.dataset.priorityId === id);
+    const rect = visual?.getBoundingClientRect();
+    const origin = rect && rect.width > 0 && rect.height > 0
+      ? { left: rect.left, top: rect.top, width: rect.width, height: rect.height }
+      : null;
+    setFocusSession({ priorityId: id, origin, opener });
   };
 
   const completePriority = (id: string) => {
@@ -2102,7 +2148,7 @@ function FocusGalaxyContainer() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target instanceof HTMLElement ? e.target : null;
-      if (isAddOpen || isManageOpen || confirmation || isMobileMenuOpen) return;
+      if (isAddOpen || isManageOpen || confirmation || isMobileMenuOpen || isPlanetFocusOpen) return;
       if (target?.closest('[role="tablist"], [role="dialog"], [role="alertdialog"]')) return;
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName ?? '')) return;
       if (e.key === 'Escape') {
@@ -2136,7 +2182,7 @@ function FocusGalaxyContainer() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [priorities, selectedId, isAddOpen, isManageOpen, confirmation, isMobileMenuOpen]);
+  }, [priorities, selectedId, isAddOpen, isManageOpen, confirmation, isMobileMenuOpen, isPlanetFocusOpen]);
 
   const rankedPriorities = useMemo(
     () => [...priorities].sort((a, b) => getFocusScore(b) - getFocusScore(a)),
@@ -2144,6 +2190,7 @@ function FocusGalaxyContainer() {
   );
   const topPriorities = rankedPriorities.slice(0, 3);
   const selectedPriority = priorities.find(p => p.id === selectedId);
+  const focusPriority = focusSession ? priorities.find((p) => p.id === focusSession.priorityId) : undefined;
   
   const insight = useMemo(() => {
     if (!selectedPriority) {
@@ -2186,8 +2233,10 @@ function FocusGalaxyContainer() {
 
   return (
     <div 
+      ref={galaxyAppRef}
       className={`focus-galaxy-app relative w-full h-[100dvh] overflow-hidden bg-background select-none ${isZenMode ? 'zen-mode' : ''}${isMobileViewport && isSelectedPanelExpanded ? ' mobile-detail-expanded' : ''}`}
       style={cosmosVisualStyle}
+      aria-hidden={isPlanetFocusOpen}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
     >
@@ -2298,6 +2347,7 @@ function FocusGalaxyContainer() {
                   selectedId={selectedId}
                   onSelect={selectPriority}
                   isCompleting={p.id === completingId}
+                  isFocusModeOpen={isPlanetFocusOpen}
                   prefersReducedMotion={prefersReducedMotion}
                 />
               ))}
@@ -2368,6 +2418,7 @@ function FocusGalaxyContainer() {
                   priority={selectedPriority}
                   onUpdate={(metric, val) => updatePriority(selectedPriority.id, metric, val)}
                   onRename={(name) => renamePriority(selectedPriority.id, name)}
+                  onEnterFocus={(opener) => enterPlanetFocus(selectedPriority.id, opener)}
                   onComplete={() => completePriority(selectedPriority.id)}
                   onClose={() => setSelectedId(null)}
                   onRequestRemove={() => requestRemovePriority(selectedPriority.id)}
@@ -2407,6 +2458,25 @@ function FocusGalaxyContainer() {
           onClose={() => setConfirmation(null)}
         />
       </AnimatePresence>
+
+      {focusPriority && focusSession && createPortal(
+        <PlanetFocusMode
+          priority={focusPriority}
+          score={getFocusScore(focusPriority)}
+          origin={focusSession.origin}
+          prefersReducedMotion={prefersReducedMotion}
+          onUpdateNotes={(notes) => updatePriorityNotes(focusPriority.id, notes)}
+          onClose={() => {
+            const opener = focusSession.opener;
+            galaxyAppRef.current?.removeAttribute('inert');
+            setFocusSession(null);
+            requestAnimationFrame(() => {
+              if (opener?.isConnected) opener.focus({ preventScroll: true });
+            });
+          }}
+        />,
+        document.body,
+      )}
 
       {/* Keyboard Shortcuts and Galaxy Explore Pill */}
       <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 pointer-events-auto hidden md:flex items-center gap-3 opacity-60 hover:opacity-100 transition-opacity bg-black/50 px-4 py-1.5 rounded-full border border-white/10 backdrop-blur-md text-[11px] text-white/70">

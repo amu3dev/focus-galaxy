@@ -1267,3 +1267,432 @@ input[type=range]::-moz-range-thumb {
     outline-offset: 2px;
   }
 }
+
+/* Planet Focus: a quieter layer of the same galaxy, entered from a selected orbit. */
+.selected-panel-header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+}
+.selected-panel-focus {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid color-mix(in srgb, var(--panel-glow) 76%, rgba(255,255,255,0.2));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel-glow) 42%, rgba(255,255,255,0.035));
+  color: rgba(255,255,255,0.9);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+.selected-panel-focus:hover {
+  border-color: color-mix(in srgb, var(--panel-glow) 76%, rgba(255,255,255,0.45));
+  background: color-mix(in srgb, var(--panel-glow) 62%, rgba(255,255,255,0.07));
+  color: white;
+}
+.selected-panel-focus:active { transform: scale(0.97); }
+.selected-panel-focus:focus-visible,
+.planet-focus-back:focus-visible,
+.planet-focus-notes textarea:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--planet-focus-hue, #c59cff) 78%, white);
+  outline-offset: 3px;
+}
+
+.planet-focus-overlay {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  display: flex;
+  height: 100dvh;
+  max-height: 100dvh;
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: calc(env(safe-area-inset-top, 0px) + 18px) clamp(24px, 5vw, 76px) calc(env(safe-area-inset-bottom, 0px) + 22px);
+  isolation: isolate;
+  background:
+    radial-gradient(ellipse at 20% 52%, color-mix(in srgb, var(--planet-focus-hue) 13%, transparent), transparent 44%),
+    radial-gradient(ellipse at 86% 13%, rgba(90, 74, 164, 0.1), transparent 38%),
+    rgba(3, 3, 12, 0.955);
+  color: #fff;
+  backdrop-filter: blur(14px) saturate(115%);
+  -webkit-backdrop-filter: blur(14px) saturate(115%);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.2) transparent;
+  touch-action: pan-y;
+}
+.planet-focus-nebula {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 24% 48%, color-mix(in srgb, var(--planet-focus-hue) 13%, transparent), transparent 48%),
+    radial-gradient(ellipse at 78% 86%, rgba(63, 72, 157, 0.1), transparent 40%);
+}
+.planet-focus-topbar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  min-height: 46px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: min(100%, 1240px);
+  margin: 0 auto;
+}
+.planet-focus-back {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 14px 0 12px;
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 999px;
+  background: rgba(255,255,255,0.055);
+  color: rgba(255,255,255,0.88);
+  font-size: 12px;
+  font-weight: 700;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+  touch-action: manipulation;
+}
+.planet-focus-back:hover { border-color: rgba(255,255,255,0.27); background: rgba(255,255,255,0.1); color: white; }
+.planet-focus-location,
+.planet-focus-orbit-caption {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255,255,255,0.48);
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  white-space: nowrap;
+}
+.planet-focus-location i,
+.planet-focus-orbit-caption i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--planet-focus-hue);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--planet-focus-hue) 70%, transparent);
+}
+.planet-focus-layout {
+  display: grid;
+  width: min(100%, 1240px);
+  min-height: 0;
+  flex: 1 0 auto;
+  grid-template-columns: minmax(300px, 0.88fr) minmax(360px, 1fr);
+  align-items: center;
+  gap: clamp(34px, 6vw, 90px);
+  margin: 0 auto;
+}
+.planet-focus-hero {
+  position: relative;
+  display: grid;
+  min-height: min(70vh, 650px);
+  place-items: center;
+  isolation: isolate;
+}
+.planet-focus-starfield {
+  position: absolute;
+  z-index: -1;
+  inset: 8%;
+  pointer-events: none;
+  opacity: 0.4;
+  background-image:
+    radial-gradient(1.5px 1.5px at 18% 26%, white 100%, transparent),
+    radial-gradient(1px 1px at 78% 19%, rgba(221,210,255,0.9) 100%, transparent),
+    radial-gradient(1.5px 1.5px at 84% 75%, rgba(255,255,255,0.8) 100%, transparent),
+    radial-gradient(1px 1px at 25% 82%, rgba(212,220,255,0.78) 100%, transparent);
+  background-size: 180px 160px, 230px 210px, 260px 230px, 200px 190px;
+  mask-image: radial-gradient(ellipse, black 4%, transparent 74%);
+}
+.planet-focus-orbit-glow {
+  position: absolute;
+  z-index: -1;
+  width: min(88%, 400px);
+  aspect-ratio: 1;
+  border: 1px solid color-mix(in srgb, var(--planet-focus-hue) 28%, transparent);
+  border-radius: 50%;
+  box-shadow: inset 0 0 75px color-mix(in srgb, var(--planet-focus-hue) 9%, transparent), 0 0 60px color-mix(in srgb, var(--planet-focus-hue) 9%, transparent);
+  transform: perspective(680px) rotateX(59deg) rotateZ(-14deg) scale(1.12);
+  animation: planet-focus-orbit-breathe 9s ease-in-out infinite alternate;
+}
+@keyframes planet-focus-orbit-breathe {
+  from { opacity: 0.48; transform: perspective(680px) rotateX(59deg) rotateZ(-14deg) scale(1.08); }
+  to { opacity: 0.78; transform: perspective(680px) rotateX(59deg) rotateZ(-14deg) scale(1.13); }
+}
+.planet-focus-orb-target {
+  position: relative;
+  z-index: 1;
+  width: clamp(204px, 23vw, 284px);
+  aspect-ratio: 1;
+}
+.planet-focus-orb-flight,
+.planet-focus-orb-art {
+  position: absolute;
+  inset: 0;
+}
+.planet-focus-orb-flight { transform-origin: center; will-change: transform, opacity; }
+.planet-focus-orb-art { filter: drop-shadow(0 0 35px color-mix(in srgb, var(--planet-focus-hue) 25%, transparent)); }
+.planet-focus-orb-art > .orb-planet { width: 100%; height: 100%; max-width: none; max-height: none; }
+.planet-focus-orbit-caption {
+  position: absolute;
+  bottom: 8%;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.planet-focus-content {
+  width: 100%;
+  min-width: 0;
+  max-width: 620px;
+  padding: 22px 0 28px;
+  animation: planet-focus-content-enter 520ms 160ms both cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes planet-focus-content-enter {
+  from { opacity: 0; transform: translateY(9px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.planet-focus-eyebrow {
+  margin: 0 0 9px;
+  color: color-mix(in srgb, var(--planet-focus-hue) 76%, white 24%);
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+.planet-focus-heading h1 {
+  max-width: 100%;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: white;
+  font-family: var(--font-display);
+  font-size: clamp(36px, 4.6vw, 64px);
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  line-height: 1.04;
+  text-shadow: 0 4px 30px color-mix(in srgb, var(--planet-focus-hue) 20%, transparent);
+}
+.planet-focus-score {
+  display: flex;
+  min-height: 48px;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 15px;
+}
+.planet-focus-score strong {
+  color: white;
+  font-family: var(--font-display);
+  font-size: 38px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+.planet-focus-score > span {
+  color: rgba(255,255,255,0.47);
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+.planet-focus-score > div {
+  width: min(118px, 20%);
+  height: 3px;
+  overflow: hidden;
+  margin: 0 0 5px auto;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.12);
+}
+.planet-focus-score > div i,
+.planet-focus-metric-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--planet-focus-hue);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--planet-focus-hue) 70%, transparent);
+}
+.planet-focus-signals {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 15px;
+  margin-top: 18px;
+  padding: 17px 0 18px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.planet-focus-metric-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.planet-focus-metric-line > span {
+  color: rgba(255,255,255,0.58);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+.planet-focus-metric-line > strong {
+  color: rgba(255,255,255,0.94);
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.planet-focus-metric-line small { color: rgba(255,255,255,0.42); font-size: 9px; font-weight: 600; }
+.planet-focus-metric-track {
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.1);
+}
+.planet-focus-metric-track i { opacity: 0.86; }
+.planet-focus-notes { margin-top: 24px; }
+.planet-focus-notes-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.planet-focus-notes-heading label {
+  display: block;
+  color: rgba(255,255,255,0.92);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.planet-focus-notes-heading p {
+  margin: 4px 0 0;
+  color: rgba(255,255,255,0.45);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.planet-focus-notes-heading > span {
+  flex: 0 0 auto;
+  padding-bottom: 2px;
+  color: rgba(255,255,255,0.36);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+.planet-focus-notes textarea {
+  display: block;
+  width: 100%;
+  min-height: 142px;
+  resize: vertical;
+  padding: 14px 15px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 15px;
+  outline: none;
+  background: linear-gradient(145deg, rgba(255,255,255,0.055), rgba(255,255,255,0.022));
+  color: rgba(255,255,255,0.93);
+  font: 500 13px/1.65 var(--font-sans);
+  caret-color: var(--planet-focus-hue);
+  user-select: text;
+  -webkit-user-select: text;
+  transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+.planet-focus-notes textarea::placeholder { color: rgba(255,255,255,0.33); }
+.planet-focus-notes textarea:focus { border-color: color-mix(in srgb, var(--planet-focus-hue) 68%, rgba(255,255,255,0.24)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--planet-focus-hue) 12%, transparent); }
+
+@media (max-width: 767px) {
+  .selected-panel-header-actions { gap: 6px; }
+  .selected-panel-focus {
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    border-radius: 50%;
+  }
+  .selected-panel-focus span { display: none; }
+  .selected-panel-close { flex: 0 0 44px; }
+  .planet-focus-overlay {
+    padding: calc(env(safe-area-inset-top, 0px) + 10px) 18px calc(env(safe-area-inset-bottom, 0px) + 18px);
+    background:
+      radial-gradient(ellipse at 50% 23%, color-mix(in srgb, var(--planet-focus-hue) 12%, transparent), transparent 39%),
+      rgba(3, 3, 12, 0.96);
+  }
+  .planet-focus-topbar { min-height: 44px; gap: 8px; }
+  .planet-focus-back { min-height: 44px; padding-inline: 11px 13px; font-size: 11px; }
+  .planet-focus-location { gap: 6px; font-size: 8px; letter-spacing: 0.15em; }
+  .planet-focus-layout {
+    display: flex;
+    width: 100%;
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    margin: 0 auto;
+  }
+  .planet-focus-hero {
+    width: 100%;
+    min-height: clamp(168px, 25svh, 218px);
+    flex: 0 0 auto;
+  }
+  .planet-focus-starfield { inset: 2% 8%; opacity: 0.34; }
+  .planet-focus-orbit-glow { width: min(58vw, 236px); }
+  .planet-focus-orb-target { width: clamp(132px, 42vw, 172px); }
+  .planet-focus-orbit-caption { bottom: 3px; font-size: 8px; }
+  .planet-focus-content {
+    max-width: 560px;
+    margin: 0 auto;
+    padding: 2px 0 12px;
+  }
+  .planet-focus-eyebrow { margin-bottom: 5px; font-size: 8px; }
+  .planet-focus-heading h1 { font-size: clamp(30px, 9vw, 40px); }
+  .planet-focus-score { min-height: 37px; gap: 8px; margin-top: 8px; }
+  .planet-focus-score strong { font-size: 31px; }
+  .planet-focus-score > span { font-size: 8px; }
+  .planet-focus-score > div { width: min(84px, 24%); margin-bottom: 4px; }
+  .planet-focus-signals {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+    padding: 12px 0 13px;
+  }
+  .planet-focus-metric-line { min-height: 34px; flex-direction: column-reverse; align-items: flex-start; justify-content: flex-end; gap: 2px; margin-bottom: 7px; }
+  .planet-focus-metric-line > span { font-size: 8px; letter-spacing: 0.07em; line-height: 1.25; }
+  .planet-focus-metric-line > strong { font-size: 13px; }
+  .planet-focus-notes { margin-top: 14px; }
+  .planet-focus-notes-heading { margin-bottom: 8px; }
+  .planet-focus-notes-heading label { font-size: 14px; }
+  .planet-focus-notes-heading p { max-width: 31ch; font-size: 9px; }
+  .planet-focus-notes textarea { min-height: 128px; padding: 12px 13px; border-radius: 13px; font-size: 16px; line-height: 1.55; }
+}
+
+@media (max-width: 374px) {
+  .planet-focus-overlay { padding-inline: 14px; }
+  .planet-focus-location { font-size: 7px; letter-spacing: 0.12em; }
+  .planet-focus-back { gap: 7px; }
+  .planet-focus-metric-line > span { letter-spacing: 0.03em; }
+}
+
+@media (max-height: 560px) {
+  .planet-focus-hero { min-height: 270px; }
+  .planet-focus-orb-target { width: clamp(144px, 20vw, 196px); }
+  .planet-focus-orbit-caption { bottom: 3%; }
+  .planet-focus-content { padding-top: 8px; }
+  .planet-focus-notes textarea { min-height: 100px; }
+}
+
+@media (max-width: 767px) and (max-height: 560px) {
+  .planet-focus-hero { min-height: 150px; }
+  .planet-focus-orb-target { width: 118px; }
+  .planet-focus-content { padding-top: 0; }
+  .planet-focus-signals { margin-top: 5px; padding-block: 8px; }
+  .planet-focus-notes { margin-top: 9px; }
+  .planet-focus-notes textarea { min-height: 78px; }
+}
