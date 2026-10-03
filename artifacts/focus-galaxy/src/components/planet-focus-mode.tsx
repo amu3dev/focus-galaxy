@@ -54,7 +54,9 @@ export function PlanetFocusMode({
   onClose,
 }: PlanetFocusModeProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const exitPromptRef = useRef<HTMLElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
+  const lastContentFocusRef = useRef<HTMLElement | null>(null);
   const returnFlight = useRef({ x: 0, y: 0, scale: 1 });
   const closing = useRef(false);
   const [hasUnsavedContent, setHasUnsavedContent] = useState(false);
@@ -157,6 +159,18 @@ export function PlanetFocusMode({
     if (!hasUnsavedContent) setShowExitPrompt(false);
   }, [hasUnsavedContent]);
 
+  useLayoutEffect(() => {
+    if (showExitPrompt) {
+      exitPromptRef.current?.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });
+      return;
+    }
+
+    if (hasUnsavedContentRef.current) {
+      const target = lastContentFocusRef.current;
+      if (target?.isConnected) target.focus({ preventScroll: true });
+    }
+  }, [showExitPrompt]);
+
   const requestClose = async (discardUnsaved = false) => {
     if (closing.current) return;
     if (hasUnsavedContentRef.current && !discardUnsaved) {
@@ -197,6 +211,16 @@ export function PlanetFocusMode({
       aria-labelledby="planet-focus-title"
       aria-describedby="planet-focus-score"
       data-testid="planet-focus-mode"
+      onFocusCapture={(event) => {
+        const target = event.target;
+        if (
+          target instanceof HTMLElement
+          && target.closest('[data-planet-composer]')
+          && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)
+        ) {
+          lastContentFocusRef.current = target;
+        }
+      }}
     >
       <div className="planet-focus-nebula" aria-hidden="true" />
       <div className="planet-focus-topbar">
@@ -208,7 +232,7 @@ export function PlanetFocusMode({
       </div>
 
       {showExitPrompt && (
-        <aside className="planet-focus-exit-prompt" role="alert" aria-live="assertive">
+        <aside className="planet-focus-exit-prompt" ref={exitPromptRef} role="alert" aria-live="assertive">
           <p>You have unsaved content. Save it or discard it before returning to the galaxy.</p>
           <div>
             <button type="button" onClick={() => setShowExitPrompt(false)}>Keep editing</button>
