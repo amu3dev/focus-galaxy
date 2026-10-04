@@ -367,20 +367,43 @@ function readPriorities(): Priority[] {
     return parsed.flatMap((candidate): Priority[] => {
       if (!candidate || typeof candidate !== 'object') return [];
       const priority = candidate as Priority;
-      const savedEntries = Array.isArray(priority.entries)
+      const validSavedEntries = Array.isArray(priority.entries)
         ? priority.entries.filter(isPlanetEntry)
         : [];
+      const originalEntryIds = new Set(validSavedEntries.map((entry) => entry.id));
+      const normalizedEntryIds = new Set<string>();
+      const savedEntries = validSavedEntries.map((entry) => {
+        if (!normalizedEntryIds.has(entry.id)) {
+          normalizedEntryIds.add(entry.id);
+          return entry;
+        }
+
+        let suffix = 1;
+        let id = `${entry.id}-${suffix}`;
+        while (originalEntryIds.has(id) || normalizedEntryIds.has(id)) {
+          suffix += 1;
+          id = `${entry.id}-${suffix}`;
+        }
+        normalizedEntryIds.add(id);
+        return { ...entry, id };
+      });
       const legacyNote = typeof priority.notes === 'string' ? priority.notes : '';
       const shouldMigrateNote = legacyNote.trim().length > 0
         && !savedEntries.some((entry) => entry.type === 'note' && entry.text === legacyNote);
       const { notes: _legacyNotes, ...currentPriority } = priority;
       const migratedAt = Date.now();
+      const legacyNoteId = `legacy-note-${priority.id}`;
+      let migratedNoteId = legacyNoteId;
+      let suffix = 1;
+      while (normalizedEntryIds.has(migratedNoteId)) {
+        migratedNoteId = `${legacyNoteId}-${suffix}`;
+        suffix += 1;
+      }
 
-      // The legacy field is removed after this one-time read; the stable ID also
-      // prevents a duplicate if a partially migrated record is encountered.
+      // Preserve the migration ID unless it collides with a saved entry.
       const entries: PlanetEntry[] = shouldMigrateNote
         ? [{
-            id: `legacy-note-${priority.id}`,
+            id: migratedNoteId,
             type: 'note',
             text: legacyNote,
             createdAt: migratedAt,
