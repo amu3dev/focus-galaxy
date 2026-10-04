@@ -1247,6 +1247,14 @@ function SelectedPanel({
     onRename(nextName);
   };
 
+  let noteCount = 0;
+  let taskCount = 0;
+  for (const entry of priority.entries ?? []) {
+    if (entry.type === 'note') noteCount += 1;
+    else taskCount += 1;
+  }
+  const contentCountLabel = `${noteCount} ${noteCount === 1 ? 'note' : 'notes'} · ${taskCount} ${taskCount === 1 ? 'task' : 'tasks'}`;
+
   return (
     <form
       className={`selected-panel-card panel-card flex flex-col relative overflow-hidden h-full z-20 pointer-events-auto${isMobile ? ' mobile-priority-sheet' : ''}`}
@@ -1303,10 +1311,11 @@ function SelectedPanel({
                 className="mobile-sheet-summary"
                 onClick={() => onToggleExpanded(true)}
                 aria-expanded={false}
-                aria-label={`Expand ${priority.name}, score ${getFocusScore(priority)}`}
+                aria-label={`Expand ${priority.name}, score ${getFocusScore(priority)}; ${contentCountLabel}`}
               >
                 <span className="mobile-sheet-name">{priority.name}</span>
                 <span className="mobile-sheet-score">Score <strong>{getFocusScore(priority)}</strong></span>
+                <span className="selected-panel-content-count">{contentCountLabel}</span>
               </button>
             ) : (
               <>
@@ -1322,6 +1331,7 @@ function SelectedPanel({
                 <span className="selected-panel-score text-[10px] uppercase tracking-widest font-display font-bold mt-1 px-1" style={{ color: priority.hue }}>
                   {getFocusScore(priority) > 75 ? 'HIGH FOCUS' : 'IN ORBIT'} • SCORE {getFocusScore(priority)}
                 </span>
+                <span className="selected-panel-content-count">{contentCountLabel}</span>
               </>
             )}
           </div>
@@ -1355,7 +1365,7 @@ function SelectedPanel({
           >
       {/* Quick Presets */}
       <div className="selected-panel-presets flex items-center gap-1.5 mb-3 flex-wrap">
-        <span className="text-[9px] uppercase tracking-widest text-white/40 font-bold mr-0.5">Presets:</span>
+        <span className="selected-panel-presets-label">Presets</span>
         <button
           type="button"
           onClick={() => { onUpdate('importance', 9); onUpdate('urgency', 9); onUpdate('energy', 7); }}

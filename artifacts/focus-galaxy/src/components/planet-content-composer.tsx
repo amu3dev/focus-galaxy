@@ -338,14 +338,8 @@ export function PlanetContentComposer({
       <div className="planet-content-heading">
         <div className="planet-content-heading-copy">
           <h2 id="planet-content-title">Inside this planet</h2>
-          <p className="planet-content-counts" aria-label={`${noteCount} ${noteCount === 1 ? 'note' : 'notes'}, ${taskCount} ${taskCount === 1 ? 'task' : 'tasks'}`}>
-            <span>{noteCount} {noteCount === 1 ? 'note' : 'notes'}</span>
-            <i aria-hidden="true">·</i>
-            <span>{taskCount} {taskCount === 1 ? 'task' : 'tasks'}</span>
-          </p>
         </div>
         <div className="planet-content-create">
-          <span className="planet-content-control-label">CREATE</span>
           <div className="planet-content-switch" role="group" aria-label="Create planet content">
             <button
               type="button"
@@ -370,10 +364,15 @@ export function PlanetContentComposer({
       </div>
 
       <div className="planet-content-view-row">
-        <span className="planet-content-control-label">VIEW</span>
         <div className="planet-content-filter" role="group" aria-label="View planet content">
           {(['all', 'notes', 'tasks'] as const).map((view) => {
             const label = view === 'all' ? 'All' : view === 'notes' ? 'Notes' : 'Tasks';
+            const count = view === 'all' ? entries.length : view === 'notes' ? noteCount : taskCount;
+            const countNoun = view === 'all'
+              ? count === 1 ? 'item' : 'items'
+              : view === 'notes'
+                ? count === 1 ? 'note' : 'notes'
+                : count === 1 ? 'task' : 'tasks';
             return (
               <button
                 ref={(button) => {
@@ -383,10 +382,12 @@ export function PlanetContentComposer({
                 type="button"
                 className={contentView === view ? 'is-active' : ''}
                 aria-pressed={contentView === view}
+                aria-label={`${label}, ${count} ${countNoun}`}
                 onClick={() => { setContentView(view); clearFeedback(); }}
                 key={view}
               >
-                {label}
+                <span>{label}</span>
+                <span className="planet-content-filter-count" aria-hidden="true">{count}</span>
               </button>
             );
           })}

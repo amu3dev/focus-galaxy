@@ -1297,6 +1297,24 @@ input[type=range]::-moz-range-thumb {
   color: white;
 }
 .selected-panel-focus:active { transform: scale(0.97); }
+.selected-panel-content-count {
+  display: block;
+  margin-top: 3px;
+  padding-inline: 4px;
+  color: rgba(255,255,255,0.48);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1.25;
+}
+.selected-panel-presets-label {
+  margin-right: 4px;
+  color: rgba(255,255,255,0.52);
+  font-size: 10px;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
 .selected-panel-focus:focus-visible,
 .planet-focus-back:focus-visible,
 .planet-focus-overlay button:focus-visible,
@@ -1583,25 +1601,7 @@ input[type=range]::-moz-range-thumb {
   line-height: 1.2;
 }
 .planet-content-heading-copy { min-width: 0; }
-.planet-content-counts {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 4px 0 0;
-  color: rgba(255,255,255,0.45);
-  font-size: 10px;
-  line-height: 1.5;
-}
-.planet-content-counts i { color: rgba(255,255,255,0.28); font-style: normal; }
-.planet-content-create { display: grid; justify-items: end; gap: 4px; }
-.planet-content-control-label {
-  color: rgba(255,255,255,0.4);
-  font-family: var(--font-display);
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: 0.16em;
-  line-height: 1;
-}
+.planet-content-create { display: flex; justify-content: flex-end; }
 .planet-content-switch {
   display: flex;
   flex: 0 0 auto;
@@ -1637,36 +1637,62 @@ input[type=range]::-moz-range-thumb {
 .planet-content-view-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: flex-start;
   margin: 0 0 10px;
 }
 .planet-content-filter {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 2px;
-  padding: 3px;
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 11px;
-  background: rgba(1,2,10,0.38);
+  gap: 14px;
 }
 .planet-content-filter button {
-  min-width: 47px;
-  min-height: 36px;
-  padding: 0 10px;
-  border: 1px solid transparent;
-  border-radius: 8px;
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 3px;
+  border: 0;
+  border-radius: 0;
   background: transparent;
   color: rgba(255,255,255,0.55);
-  font-size: 10px;
-  font-weight: 700;
-  transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease;
+  font-size: 11px;
+  font-weight: 600;
+  transition: color 140ms ease, font-weight 140ms ease;
+}
+.planet-content-filter button::after {
+  position: absolute;
+  right: 3px;
+  bottom: 2px;
+  left: 3px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--planet-focus-hue);
+  box-shadow: 0 0 9px color-mix(in srgb, var(--planet-focus-hue) 55%, transparent);
+  content: '';
+  opacity: 0;
+  transform: scaleX(0.62);
+  transition: opacity 140ms ease, transform 140ms ease;
 }
 .planet-content-filter button.is-active {
-  border-color: color-mix(in srgb, var(--planet-focus-hue) 34%, transparent);
-  background: color-mix(in srgb, var(--planet-focus-hue) 14%, rgba(255,255,255,0.045));
   color: white;
+  font-weight: 750;
+}
+.planet-content-filter button.is-active::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+.planet-content-filter-count {
+  color: rgba(255,255,255,0.42);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.planet-content-filter button.is-active .planet-content-filter-count {
+  color: color-mix(in srgb, var(--planet-focus-hue) 58%, white 42%);
 }
 .planet-content-compose,
 .planet-content-edit {
@@ -2034,11 +2060,13 @@ input[type=range]::-moz-range-thumb {
   .planet-content-composer { margin-top: 14px; }
   .planet-content-heading { align-items: flex-start; gap: 8px; margin-bottom: 9px; }
   .planet-content-heading h2 { font-size: 14px; }
-  .planet-content-counts { gap: 5px; font-size: 9px; }
-  .planet-content-switch { margin-top: -2px; }
+  .selected-panel-content-count { margin-top: 2px; font-size: 10px; }
+  .selected-panel-presets-label { margin-right: 1px; font-size: 9px; }
   .planet-content-switch button { min-width: 60px; min-height: 44px; gap: 5px; padding-inline: 8px; font-size: 10px; }
   .planet-content-view-row { margin-bottom: 9px; }
-  .planet-content-filter button { min-width: 48px; min-height: 44px; padding-inline: 10px; font-size: 10px; }
+  .planet-content-filter { gap: 13px; }
+  .planet-content-filter button { min-height: 44px; padding-inline: 3px; font-size: 11px; }
+  .planet-content-filter-count { font-size: 10px; }
   .planet-content-completed-toggle { min-height: 44px; }
   .planet-content-compose { padding: 10px 11px; border-radius: 13px; }
   .planet-content-compose textarea,
