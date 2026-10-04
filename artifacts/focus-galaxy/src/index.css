@@ -2164,6 +2164,11 @@ input[type=range]::-moz-range-thumb {
   .mobile-insights-trigger:active { transform: scale(0.97); }
   .mobile-insights-trigger:focus-visible { outline: 2px solid rgba(225,201,255,0.92); outline-offset: 3px; }
 
+  @media (max-width: 1024px) and (max-height: 560px) and (orientation: landscape) {
+    /* Keep viewport-fixed mobile layers out of the galaxy's 3D perspective plane. */
+    .focus-galaxy-app.mobile-ui-viewport { perspective: none; }
+  }
+
   .mobile-insights-overlay {
     background: rgba(2, 2, 10, 0.28) !important;
     backdrop-filter: blur(2px);

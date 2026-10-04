@@ -2227,6 +2227,7 @@ function FocusGalaxyContainer() {
 
   const enterPlanetFocus = (id: string, opener: HTMLElement) => {
     setIsMobileInsightsOpen(false);
+    if (isMobileViewport) setIsSelectedPanelExpanded(false);
     const visual = Array.from(document.querySelectorAll<HTMLElement>('.orb-screen-visual[data-priority-id]'))
       .find((element) => element.dataset.priorityId === id);
     const rect = visual?.getBoundingClientRect();
@@ -2453,21 +2454,23 @@ function FocusGalaxyContainer() {
             if (open) setIsMobileMenuOpen(false);
           }}
         >
-          <div className="mobile-insights-trigger-slot">
-            <SheetTrigger asChild>
-              <button
-                type="button"
-                className="mobile-insights-trigger"
-                aria-label={isMobileInsightsOpen ? 'Close Galaxy insights' : 'Open Galaxy insights'}
-                aria-controls="mobile-galaxy-insights"
-                aria-expanded={isMobileInsightsOpen}
-              >
-                <Activity size={16} aria-hidden="true" />
-                <span>Insights</span>
-                <ChevronDown size={14} className="mobile-insights-trigger-cue" aria-hidden="true" />
-              </button>
-            </SheetTrigger>
-          </div>
+          {(!selectedPriority || !isSelectedPanelExpanded) && (
+            <div className="mobile-insights-trigger-slot">
+              <SheetTrigger asChild>
+                <button
+                  type="button"
+                  className="mobile-insights-trigger"
+                  aria-label={isMobileInsightsOpen ? 'Close Galaxy insights' : 'Open Galaxy insights'}
+                  aria-controls="mobile-galaxy-insights"
+                  aria-expanded={isMobileInsightsOpen}
+                >
+                  <Activity size={16} aria-hidden="true" />
+                  <span>Insights</span>
+                  <ChevronDown size={14} className="mobile-insights-trigger-cue" aria-hidden="true" />
+                </button>
+              </SheetTrigger>
+            </div>
+          )}
           <SheetContent
             side="bottom"
             id="mobile-galaxy-insights"
