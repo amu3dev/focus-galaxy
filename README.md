@@ -47,6 +47,27 @@ pnpm run typecheck
 pnpm run build
 ```
 
+Local development defaults to port `5173` and base path `/`. Set `PORT` or
+`BASE_PATH` to override these defaults; static builds require neither variable.
+
+Browser regression checks require a running app and an isolated Chrome profile
+with remote debugging enabled. Open the app in that profile, then run:
+
+```bash
+pnpm --filter @workspace/focus-galaxy run test:planet-storage-content
+pnpm --filter @workspace/focus-galaxy run test:planet-interaction
+```
+
+Both commands default to `APP_URL=http://127.0.0.1:5173/` and `CDP_PORT=9228`;
+set these variables to match your setup. They replace app data in the test
+profile. The interaction suite includes a 130-second orbital observation.
+
+When invalid saved priorities or entries are rejected, their original stored text
+is retained in localStorage under `focus-galaxy-priorities-v2.corrupt`. Later
+distinct recovery copies use `.corrupt-1`, `.corrupt-2`, and so on. If a recovery
+copy cannot be written, the app keeps the original value and warns that session
+changes will not be saved; freeing browser storage and reloading retries recovery.
+
 ## Deploy on Cloudflare Workers
 
 The app deploys as static assets to <https://focus-galaxy.amu3dev.workers.dev> through Cloudflare Workers Builds, connected to `amu3dev/focus-galaxy`. Pushes to `main` trigger production builds. Cloudflare runs `PORT=18857 BASE_PATH=/ pnpm --filter @workspace/focus-galaxy run build`, then deploys with `pnpm dlx wrangler@4.142.0 deploy --config wrangler.jsonc`. The build root is the repository root.

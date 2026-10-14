@@ -88,6 +88,9 @@ export function PlanetContentComposer({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState('');
   const [savedMessage, setSavedMessage] = useState('');
+  const [pendingDeletion, setPendingDeletion] = useState<{ entry: PlanetEntry; message: string } | null>(null);
+  const deleteCancelRef = useRef<HTMLButtonElement>(null);
+  const deleteOpenerRef = useRef<HTMLElement | null>(null);
   const taskInputRef = useRef<HTMLInputElement>(null);
   const editInputRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null);
   const taskToggleRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -125,6 +128,22 @@ export function PlanetContentComposer({
     if (editingId) editInputRef.current?.focus({ preventScroll: true });
   }, [editingId]);
 
+  useEffect(() => {
+    if (!pendingDeletion) return;
+    deleteCancelRef.current?.focus();
+    const cancelOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      // Run before Focus mode's window listener so Escape cancels this action
+      // even after the user tabs outside the composer.
+      event.stopPropagation();
+      setPendingDeletion(null);
+      deleteOpenerRef.current?.focus();
+    };
+    window.addEventListener('keydown', cancelOnEscape, true);
+    return () => window.removeEventListener('keydown', cancelOnEscape, true);
+  }, [pendingDeletion]);
+
   useLayoutEffect(() => {
     const entryId = pendingTaskFocus.current;
     if (entryId) {
@@ -149,7 +168,7 @@ export function PlanetContentComposer({
     event.preventDefault();
     const text = noteDraft.trim();
     if (!text) return;
-    onCreateEntry('note', noteDraft);
+    onCreateEntry('note', text);
     setNoteDraft('');
     setSavedMessage('Note saved to this planet.');
   };
@@ -176,7 +195,7 @@ export function PlanetContentComposer({
     if (!editingId || !text) return;
     const changed = editChanged;
     const entryType = editingEntry?.type;
-    if (changed) onSaveEntry(editingId, editDraft);
+    if (changed) onSaveEntry(editingId, text);
     setEditingId(null);
     setEditDraft('');
     setSavedMessage(changed ? (entryType === 'task' ? 'Task updated.' : 'Changes saved.') : 'No changes to save.');
@@ -202,11 +221,28 @@ export function PlanetContentComposer({
   };
 
   const deleteEntry = (entry: PlanetEntry, message: string) => {
+    deleteOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setPendingDeletion({ entry, message });
+  };
+
+  const cancelDeletion = () => {
+    setPendingDeletion(null);
+    deleteOpenerRef.current?.focus();
+  };
+
+  const confirmDeletion = () => {
+    if (!pendingDeletion) return;
+    const { entry, message } = pendingDeletion;
     const viewEntries = contentView === 'tasks' ? [...activeTasks, ...completedTasks] : filteredEntries;
     const index = viewEntries.findIndex((visibleEntry) => visibleEntry.id === entry.id);
     const nextEntry = viewEntries[index + 1] ?? viewEntries[index - 1];
     pendingDeleteFocus.current = { entryId: nextEntry?.id ?? null };
+    if (editingId === entry.id) {
+      setEditingId(null);
+      setEditDraft('');
+    }
     onDeleteEntry(entry.id);
+    setPendingDeletion(null);
     setSavedMessage(message);
   };
 
@@ -230,7 +266,7 @@ export function PlanetContentComposer({
                 spellCheck
               />
               <div className="planet-content-item-actions">
-                <button type="button" className="planet-content-icon-button" aria-label="Delete note" onClick={() => { cancelEdit(); deleteEntry(entry, 'Note deleted.'); }}>
+                <button type="button" className="planet-content-icon-button" aria-label="Delete note" onClick={() => deleteEntry(entry, 'Note deleted.')}>
                   <Trash2 size={15} aria-hidden="true" />
                 </button>
                 <button type="button" className="planet-content-icon-button" aria-label="Cancel note edit" onClick={cancelEdit}>
@@ -335,6 +371,15 @@ export function PlanetContentComposer({
 
   return (
     <section className="planet-content-composer" aria-labelledby="planet-content-title" data-planet-composer>
+      {pendingDeletion && (
+        <div className="planet-content-delete-confirm" role="group" aria-label={`Confirm ${pendingDeletion.entry.type} deletion`}>
+          <p role="alert">Permanently delete this {pendingDeletion.entry.type}? This cannot be undone.</p>
+          <div className="planet-content-item-actions">
+            <button ref={deleteCancelRef} type="button" className="planet-content-primary" onClick={cancelDeletion}>Cancel deletion</button>
+            <button type="button" className="planet-content-primary" onClick={confirmDeletion}>Confirm delete {pendingDeletion.entry.type}</button>
+          </div>
+        </div>
+      )}
       <div className="planet-content-heading">
         <div className="planet-content-heading-copy">
           <h2 id="planet-content-title">Inside this planet</h2>

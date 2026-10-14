@@ -80,14 +80,16 @@ async function evaluate(expression) {
 
 async function navigateFresh() {
   await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+  // Clear before app code executes so stale state cannot contaminate this run.
+  await send('Page.addScriptToEvaluateOnNewDocument', { source: `
+    if (location.origin === ${JSON.stringify(appOrigin)}) {
+      localStorage.removeItem('focus-galaxy-priorities-v2');
+      sessionStorage.clear();
+    }
+  ` });
+  // Runtime.enable can report errors from the page that was already open.
+  runtimeErrors.length = 0;
   await send('Page.navigate', { url: baseUrl });
-  await sleep(2500);
-  await evaluate(`(() => {
-    window.localStorage.removeItem('focus-galaxy-priorities-v2');
-    window.sessionStorage.clear();
-    return true;
-  })()`);
-  await send('Page.reload', { ignoreCache: true });
   await sleep(2500);
 }
 

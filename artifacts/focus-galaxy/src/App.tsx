@@ -356,17 +356,53 @@ function getSubLabel(name: string) {
   return map[name] || 'ORBITING';
 }
 
-function readPriorities(): Priority[] {
-  if (typeof window === 'undefined') return seedPriorities;
-  try {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-    if (!saved) return seedPriorities;
-    const parsed: unknown = JSON.parse(saved);
-    if (!Array.isArray(parsed)) return seedPriorities;
+type PriorityStorageState = { priorities: Priority[]; recoveryBlocked: boolean };
 
-    return parsed.flatMap((candidate): Priority[] => {
-      if (!candidate || typeof candidate !== 'object') return [];
-      const priority = candidate as Priority;
+function backUpRejectedPriorities(saved: string): boolean {
+  try {
+    // Keep earlier recovery copies, and avoid duplicating the same payload.
+    let key = `${STORAGE_KEY}.corrupt`;
+    let suffix = 1;
+    let existing = window.localStorage.getItem(key);
+    while (existing !== null && existing !== saved) {
+      key = `${STORAGE_KEY}.corrupt-${suffix++}`;
+      existing = window.localStorage.getItem(key);
+    }
+    if (existing === null) window.localStorage.setItem(key, saved);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function readPriorities(): PriorityStorageState {
+  if (typeof window === 'undefined') return { priorities: seedPriorities, recoveryBlocked: false };
+  let saved: string | null = null;
+  try {
+    saved = window.localStorage.getItem(STORAGE_KEY);
+    if (saved === null) return { priorities: seedPriorities, recoveryBlocked: false };
+    const parsed: unknown = JSON.parse(saved);
+    if (!Array.isArray(parsed)) {
+      return { priorities: seedPriorities, recoveryBlocked: !backUpRejectedPriorities(saved) };
+    }
+
+    const validPriorities = parsed.filter(isPriority);
+    const hasRejectedData = validPriorities.length !== parsed.length || validPriorities.some((priority) =>
+      (priority.entries !== undefined && (!Array.isArray(priority.entries) || priority.entries.some((entry) => !isPlanetEntry(entry))))
+      || (priority.notes !== undefined && typeof priority.notes !== 'string'),
+    );
+    const recoveryBlocked = hasRejectedData && !backUpRejectedPriorities(saved);
+    const originalIds = new Set(validPriorities.map((priority) => priority.id));
+    const normalizedIds = new Set<string>();
+    const priorities = validPriorities.flatMap((candidate): Priority[] => {
+      let id = candidate.id;
+      let idSuffix = 1;
+      while (normalizedIds.has(id)) {
+        id = `${candidate.id}-${idSuffix++}`;
+        while (originalIds.has(id)) id = `${candidate.id}-${idSuffix++}`;
+      }
+      normalizedIds.add(id);
+      const priority = { ...candidate, id };
       const validSavedEntries = Array.isArray(priority.entries)
         ? priority.entries.filter(isPlanetEntry)
         : [];
@@ -413,15 +449,28 @@ function readPriorities(): Priority[] {
 
       return [{ ...currentPriority, entries }];
     });
+    return { priorities, recoveryBlocked };
   } catch {
-    return seedPriorities;
+    return { priorities: seedPriorities, recoveryBlocked: saved === null || !backUpRejectedPriorities(saved) };
   }
+}
+
+function isPriority(value: unknown): value is Priority {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const priority = value as Partial<Priority>;
+  return typeof priority.id === 'string' && priority.id.trim().length > 0
+    && typeof priority.name === 'string' && priority.name.trim().length > 0
+    && [priority.importance, priority.urgency, priority.energy].every(
+      (metric) => typeof metric === 'number' && Number.isFinite(metric) && metric >= 1 && metric <= 10,
+    )
+    && typeof priority.hue === 'string' && /^#[0-9a-f]{6}$/i.test(priority.hue);
 }
 
 function isPlanetEntry(value: unknown): value is PlanetEntry {
   if (!value || typeof value !== 'object') return false;
   const entry = value as PlanetEntry;
   const hasCommonFields = typeof entry.id === 'string'
+    && entry.id.trim().length > 0
     && typeof entry.text === 'string'
     && Number.isFinite(entry.createdAt)
     && Number.isFinite(entry.updatedAt);
@@ -1195,8 +1244,7 @@ function ConfirmActionDialog({
             }
             const manageDialog = document.querySelector<HTMLElement>('[role="dialog"][aria-labelledby="manage-tasks-title"]');
             const fallback = manageDialog?.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled])')
-              ?? document.querySelector<HTMLElement>('#mobile-galaxy-controls-trigger')
-              ?? document.querySelector<HTMLElement>('.orb-screen-hit');
+              ?? getGalaxyFocusTarget();
             fallback?.focus({ preventScroll: true });
           });
         }}
@@ -1220,6 +1268,14 @@ function ConfirmActionDialog({
       </AlertDialogContent>
     </AlertDialog>
   );
+}
+
+function getGalaxyFocusTarget(excludedId?: string) {
+  return Array.from(document.querySelectorAll<HTMLElement>(
+    '.orb-screen-hit, #mobile-galaxy-controls-trigger, button[aria-label="Add priority"]',
+  )).find((element) => element.getAttribute('data-testid') !== `orb-${excludedId}`
+    && element.getClientRects().length > 0
+    && getComputedStyle(element).visibility !== 'hidden');
 }
 
 function InsightPanel({ insight, title, priority, presentation = 'desktop' }: { insight: string, title: string, priority?: Priority, presentation?: 'desktop' | 'mobile' }) {
@@ -2061,8 +2117,9 @@ function CosmosBrightnessControl({
 }
 
 function FocusGalaxyContainer() {
-  const [priorities, setPriorities] = useState<Priority[]>(readPriorities);
-  const [selectedId, setSelectedId] = useState<string | null>(() => readPriorities()[0]?.id ?? null);
+  const [initialStorage] = useState(readPriorities);
+  const [priorities, setPriorities] = useState(initialStorage.priorities);
+  const [selectedId, setSelectedId] = useState<string | null>(initialStorage.priorities[0]?.id ?? null);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isManageOpen, setIsManageOpen] = useState(false);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
@@ -2089,7 +2146,7 @@ function FocusGalaxyContainer() {
   const { toast } = useToast();
   
   const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const isPlanetFocusOpen = focusSession !== null;
+  const isPlanetFocusOpen = focusSession !== null && priorities.some((priority) => priority.id === focusSession.priorityId);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(MOBILE_VIEWPORT_QUERY);
@@ -2134,8 +2191,11 @@ function FocusGalaxyContainer() {
   }, [isMobileViewport]);
 
   useEffect(() => {
+    if (initialStorage.recoveryBlocked) {
+      return;
+    }
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(priorities));
-  }, [priorities]);
+  }, [priorities, initialStorage.recoveryBlocked]);
 
   useEffect(() => {
     const galaxy = galaxyAppRef.current;
@@ -2217,8 +2277,20 @@ function FocusGalaxyContainer() {
   };
 
   const removePriority = (id: string) => {
+    // The selected panel stays mounted during its exit animation. Never return
+    // focus to one of its controls after removing its priority.
+    const opener = confirmationOpenerRef.current;
+    if (opener?.closest('.selected-panel-card') || opener?.getAttribute('data-testid') === `orb-${id}`) {
+      confirmationOpenerRef.current = getGalaxyFocusTarget(id) ?? null;
+    }
+    setFocusSession((current) => current?.priorityId === id ? null : current);
     setPriorities(prev => prev.filter(p => p.id !== id));
     if (selectedId === id) setSelectedId(null);
+    requestAnimationFrame(() => {
+      if (document.activeElement === document.body || document.activeElement?.closest('.selected-panel-card')) {
+        getGalaxyFocusTarget(id)?.focus({ preventScroll: true });
+      }
+    });
   };
 
   const openConfirmation = (nextConfirmation: Confirmation) => {
@@ -2233,7 +2305,9 @@ function FocusGalaxyContainer() {
     if (!priority) return;
     openConfirmation({
       title: `Remove ${priority.name}?`,
-      description: 'This priority will leave your galaxy. You can add it again at any time.',
+      description: (priority.entries?.length ?? 0) > 0
+        ? `This permanently deletes the priority and all ${priority.entries!.length} attached notes/tasks. Adding the priority again will not restore its content. This cannot be undone.`
+        : 'This permanently deletes the priority. This cannot be undone.',
       confirmLabel: 'Remove Priority',
       onConfirm: () => removePriority(id),
     });
@@ -2663,12 +2737,14 @@ function FocusGalaxyContainer() {
       <AnimatePresence>
         {isAddOpen && (
           <AddPriorityDialog 
+            key="add-priority"
             onClose={() => setIsAddOpen(false)} 
             onCreate={addPriority} 
           />
         )}
         {isManageOpen && (
           <ManageTasksDialog
+            key="manage-priorities"
             priorities={priorities}
             onClose={() => setIsManageOpen(false)}
             onSelect={(id) => {
@@ -2680,11 +2756,20 @@ function FocusGalaxyContainer() {
           />
         )}
         <ConfirmActionDialog
+          key="confirm-action"
           confirmation={confirmation}
           openerRef={confirmationOpenerRef}
           onClose={() => setConfirmation(null)}
         />
       </AnimatePresence>
+
+      {initialStorage.recoveryBlocked && createPortal(
+        <aside role="alert" className="priority-recovery-warning">
+          <p className="focus-toast-title">Saved data needs recovery</p>
+          <p className="focus-toast-description">A recovery copy could not be saved. Your original data is unchanged; changes in this session will not be saved. Free browser storage and reload to retry.</p>
+        </aside>,
+        document.body,
+      )}
 
       {focusPriority && focusSession && createPortal(
         <PlanetFocusMode
