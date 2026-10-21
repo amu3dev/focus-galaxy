@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { motion, useAnimationControls } from 'framer-motion';
 import { PlanetContentComposer, type PlanetEntry, type PlanetEntryType } from '@/components/planet-content-composer';
@@ -35,6 +35,7 @@ type PlanetFocusModeProps = {
   onToggleTask: (id: string) => void;
   onDeleteEntry: (id: string) => void;
   onClose: () => void;
+  storageWarning?: ReactNode;
 };
 
 const focusTransition = {
@@ -52,6 +53,7 @@ export function PlanetFocusMode({
   onToggleTask,
   onDeleteEntry,
   onClose,
+  storageWarning,
 }: PlanetFocusModeProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const exitPromptRef = useRef<HTMLElement>(null);
@@ -297,6 +299,7 @@ export function PlanetFocusMode({
           />
         </div>
       </div>
+      {storageWarning}
     </motion.div>
   );
 }

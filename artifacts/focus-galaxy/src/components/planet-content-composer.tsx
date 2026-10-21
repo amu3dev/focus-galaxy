@@ -170,7 +170,7 @@ export function PlanetContentComposer({
     if (!text) return;
     onCreateEntry('note', text);
     setNoteDraft('');
-    setSavedMessage('Note saved to this planet.');
+    setSavedMessage('Note added to this planet.');
   };
 
   const createTask = (event: FormEvent<HTMLFormElement>) => {
@@ -198,7 +198,7 @@ export function PlanetContentComposer({
     if (changed) onSaveEntry(editingId, text);
     setEditingId(null);
     setEditDraft('');
-    setSavedMessage(changed ? (entryType === 'task' ? 'Task updated.' : 'Changes saved.') : 'No changes to save.');
+    setSavedMessage(changed ? (entryType === 'task' ? 'Task updated.' : 'Note updated.') : 'No changes to apply.');
   };
 
   const cancelEdit = () => {

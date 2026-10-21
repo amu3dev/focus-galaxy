@@ -74,19 +74,34 @@ async function click(selector) {
   let position;
   const deadline = Date.now() + 5000;
   while (Date.now() < deadline && !position) {
+    await evaluate(`(() => {
+      const element = document.querySelector(${JSON.stringify(selector)});
+      if (!element) return;
+      const rect = element.getBoundingClientRect();
+      if (!element.contains(document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2))) {
+        element.scrollIntoView({ block: 'center' });
+      }
+    })()`);
+    // Scrolling can reposition a centered, animated dialog on the next frame.
+    // Read the hit target after layout settles, rather than using stale coordinates.
+    await sleep(100);
     position = await evaluate(`(() => {
     const element = document.querySelector(${JSON.stringify(selector)});
     if (!element) return null;
-    element.scrollIntoView({ block: 'center' });
     const rect = element.getBoundingClientRect();
     const x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
     if (!rect.width || !rect.height || !element.contains(document.elementFromPoint(x, y))) return null;
     return { x, y };
   })()`);
+    if (position) {
+      await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...position });
+      await sleep(50);
+      const stillOnTarget = await evaluate(`document.querySelector(${JSON.stringify(selector)})?.contains(document.elementFromPoint(${position.x}, ${position.y}))`);
+      if (!stillOnTarget) position = null;
+    }
     if (!position) await sleep(100);
   }
   assert.ok(position, `No visible hit-test target: ${selector}`);
-  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...position });
   await send('Input.dispatchMouseEvent', { type: 'mousePressed', button: 'left', clickCount: 1, ...position });
   await send('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'left', clickCount: 1, ...position });
 }
@@ -225,21 +240,125 @@ async function main() {
     assert.deepEqual((await saved()).map((priority) => priority.id), priorities.map((priority) => priority.id));
   });
 
-  await test('completion followed immediately by Focus restores an interactive galaxy', async () => {
+  await test('completion followed immediately by Focus never leaves the galaxy inert', async () => {
     await load(seed);
-    // Dispatch both handlers in one task to deterministically exercise the
-    // 650 ms race; other flows below use actual pointer hit testing.
-    assert.ok(await evaluate(`new Promise(resolve => {
+    await evaluate(`(() => {
       document.querySelector('[aria-label="Complete task"]').click();
-      document.querySelector('.selected-panel-focus').click();
-      setTimeout(() => resolve(!!document.querySelector('[data-testid="planet-focus-mode"]')), 0);
-    })`), 'Focus must open before the delayed removal');
+      document.querySelector('.selected-panel-focus')?.click();
+    })()`);
     await sleep(1500);
     assert.equal(await evaluate(`!!document.querySelector('[inert], [data-testid="planet-focus-mode"]')`), false);
-    assert.deepEqual((await saved()).map((priority) => priority.id), ['review-b']);
+    assert.equal((await saved())[0].completed, true);
+    assert.deepEqual((await saved())[0].entries, seed[0].entries);
     await click('[aria-label="Add priority"]');
     assert.ok(await evaluate(`!!document.querySelector('#add-priority-title')`));
   });
+
+  await test('completion and restoration stay reversible when persistence fails', async () => {
+    await load(seed);
+    await evaluate(`(() => {
+      window.qaBlockWrites = true;
+      const original = Storage.prototype.setItem;
+      Storage.prototype.setItem = function(name, value) {
+        if (name === ${JSON.stringify(key)} && window.qaBlockWrites) throw new DOMException('Storage denied', 'SecurityError');
+        return original.call(this, name, value);
+      };
+    })()`);
+    await click('[aria-label="Complete task"]');
+    await waitFor(`!!document.querySelector('[data-testid="priority-save-warning"]')`);
+    assert.equal((await saved())[0].completed, undefined);
+    await sleep(800);
+    await click('[aria-label="Manage priorities"]');
+    await waitFor(`!!document.querySelector('[aria-label="Restore Review A"]')`);
+    await click('[aria-label="Restore Review A"]');
+    await waitFor(`document.querySelectorAll('.orb-screen-hit').length === 2`);
+    assert.ok(await evaluate(`!!document.querySelector('[data-testid="priority-save-warning"]')`));
+    await evaluate('window.qaBlockWrites = false');
+    await click('[data-testid="priority-save-warning"] button');
+    await waitFor(`!document.querySelector('[data-testid="priority-save-warning"]')`);
+    assert.equal((await saved())[0].completed, false);
+    assert.deepEqual((await saved())[0].entries, seed[0].entries);
+  });
+
+  for (const [width, height] of [[1440, 900], [390, 844], [844, 390]]) {
+    await test(`quota failure preserves latest edits and retry persists them at ${width}x${height}`, async () => {
+      await load(seed, width, height);
+      await openFocus();
+      await evaluate(`(() => {
+        window.qaBlockWrites = true;
+        const original = Storage.prototype.setItem;
+        Storage.prototype.setItem = function(name, value) {
+          if (name === ${JSON.stringify(key)} && window.qaBlockWrites) throw new DOMException('Quota test', 'QuotaExceededError');
+          return original.call(this, name, value);
+        };
+      })()`);
+      await input('textarea[aria-label="New note for Review A"]', 'Unsaved first note');
+      await click('.planet-content-compose button[type="submit"]');
+      await waitFor(`!!document.querySelector('[data-testid="priority-save-warning"]')`);
+      assert.deepEqual((await saved())[0].entries, seed[0].entries);
+      assert.ok(await evaluate(`document.querySelector('[data-testid="planet-focus-mode"]').innerText.includes('Unsaved first note')`));
+      assert.equal(await evaluate(`document.querySelector('[data-testid="planet-focus-mode"]').innerText.includes('Note saved')`), false);
+      await click('[data-testid="priority-save-warning"] button');
+      assert.ok(await evaluate(`!!document.querySelector('[data-testid="priority-save-warning"]')`));
+      await input('textarea[aria-label="New note for Review A"]', 'Unsaved latest note');
+      await click('.planet-content-compose button[type="submit"]');
+      assert.ok(await evaluate(`(() => {
+        const rect = document.querySelector('[data-testid="priority-save-warning"] button').getBoundingClientRect();
+        return rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight;
+      })()`));
+      await screenshot(`unsaved-${width}`);
+      // Shift+Tab from the first modal control must reach Retry save.
+      await evaluate(`document.querySelector('[aria-label="Return to galaxy"]').focus()`);
+      await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, modifiers: 8 });
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, modifiers: 8 });
+      assert.equal(await evaluate(`document.activeElement?.textContent`), 'Retry save');
+      await evaluate('window.qaBlockWrites = false');
+      await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+      await waitFor(`!document.querySelector('[data-testid="priority-save-warning"]')`);
+      assert.ok((await saved())[0].entries.some(entry => entry.text === 'Unsaved first note'));
+      assert.ok((await saved())[0].entries.some(entry => entry.text === 'Unsaved latest note'));
+      await send('Page.reload');
+      await waitFor(`!!document.querySelector('.selected-panel-focus')`);
+      await openFocus();
+      assert.ok(await evaluate(`document.querySelector('[data-testid="planet-focus-mode"]').innerText.includes('Unsaved latest note')`));
+    });
+
+    await test(`completion and restoration preserve content across reload at ${width}x${height}`, async () => {
+      await load([seed[0]], width, height);
+      if (width < 1025) {
+        await click('.mobile-sheet-summary');
+        await sleep(700);
+      }
+      await click('[aria-label="Complete task"]');
+      await sleep(1000);
+      assert.equal((await saved()).length, 1);
+      assert.equal((await saved())[0].completed, true);
+      assert.deepEqual((await saved())[0].entries, seed[0].entries);
+      await waitFor(`document.querySelectorAll('.orb-screen-hit').length === 0`);
+      await send('Page.reload');
+      await waitFor(`!!document.querySelector('button[aria-label="Add priority"]')`);
+      assert.equal(await evaluate(`document.querySelectorAll('.orb-screen-hit').length`), 0);
+      if (width < 1025) await click('#mobile-galaxy-controls-trigger');
+      await click('[aria-label="Manage priorities"]');
+      await waitFor(`!!document.querySelector('[aria-label="Restore Review A"]')`);
+      await sleep(400);
+      assert.ok(await evaluate(`(() => {
+        const rect = document.querySelector('[aria-label="Restore Review A"]').getBoundingClientRect();
+        return rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight;
+      })()`));
+      await screenshot(`restore-${width}`);
+      await click('[aria-label="Restore Review A"]');
+      await waitFor(`document.querySelectorAll('.orb-screen-hit').length === 1`);
+      assert.equal((await saved())[0].completed, false);
+      assert.deepEqual((await saved())[0].entries, seed[0].entries);
+      await send('Page.reload');
+      await waitFor(`document.querySelectorAll('.orb-screen-hit').length === 1`);
+      await openFocus();
+      assert.ok(await evaluate(`document.querySelector('[data-testid="planet-focus-mode"]').innerText.includes('Keep this note')`));
+      assert.ok(await evaluate(`document.querySelector('[data-testid="planet-focus-mode"]').innerText.includes('Keep this task')`));
+    });
+  }
 
   for (const [width, height] of [[1440, 900], [390, 844]]) {
     await test(`priority removal warns, cancels safely, and preserves focus at ${width}x${height}`, async () => {
@@ -349,4 +468,4 @@ async function main() {
   console.log(JSON.stringify({ passed: results.length, runtimeErrors: errors }));
 }
 
-main().catch((error) => { console.error(error); process.exitCode = 1; }).finally(() => socket?.close());
+main().catch(async (error) => { console.error(error); if (socket?.readyState === WebSocket.OPEN) await screenshot('storage-content-failure'); process.exitCode = 1; }).finally(() => socket?.close());

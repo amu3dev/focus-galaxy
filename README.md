@@ -68,6 +68,18 @@ distinct recovery copies use `.corrupt-1`, `.corrupt-2`, and so on. If a recover
 copy cannot be written, the app keeps the original value and warns that session
 changes will not be saved; freeing browser storage and reloading retries recovery.
 
+Completing a priority now marks it completed without deleting its notes or tasks.
+Completed priorities leave the active galaxy and Focus Signal; open **Manage
+priorities** and choose **Restore** to bring one back. Completion and restoration
+are persisted with the existing storage key. Older records without a completion
+flag remain active. Explicit removal and reset still delete data after confirmation.
+
+If a normal storage write fails, changes stay in memory and a persistent **Changes
+are not saved** warning offers **Retry save**. Retry writes the latest session
+state; the warning clears only after a successful write. Closing or reloading
+before a successful save can lose session changes. A blocked recovery backup still
+requires freeing storage and reloading; Retry save cannot bypass that safeguard.
+
 ## Deploy on Cloudflare Workers
 
 The app deploys as static assets to <https://focus-galaxy.amu3dev.workers.dev> through Cloudflare Workers Builds, connected to `amu3dev/focus-galaxy`. Pushes to `main` trigger production builds. Cloudflare runs `PORT=18857 BASE_PATH=/ pnpm --filter @workspace/focus-galaxy run build`, then deploys with `pnpm dlx wrangler@4.142.0 deploy --config wrangler.jsonc`. The build root is the repository root.

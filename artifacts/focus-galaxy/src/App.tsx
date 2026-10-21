@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, memo, type CSSProperties, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, memo, type CSSProperties, type ReactNode, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus, RotateCcw, X, Target, Activity, Orbit, Trash2, ListChecks, Volume2, VolumeX, Music2, CheckCircle2, ChevronDown, ChevronUp, SunMedium, MoreHorizontal } from 'lucide-react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -43,6 +43,7 @@ type Priority = {
   energy: number;
   hue: string;
   entries?: PlanetEntry[];
+  completed?: boolean;
   // Read only for migration from the first Planet Focus Mode notes field.
   notes?: string;
 };
@@ -463,6 +464,7 @@ function isPriority(value: unknown): value is Priority {
     && [priority.importance, priority.urgency, priority.energy].every(
       (metric) => typeof metric === 'number' && Number.isFinite(metric) && metric >= 1 && metric <= 10,
     )
+    && (priority.completed === undefined || typeof priority.completed === 'boolean')
     && typeof priority.hue === 'string' && /^#[0-9a-f]{6}$/i.test(priority.hue);
 }
 
@@ -1100,12 +1102,16 @@ function ManageTasksDialog({
   onSelect,
   onRename,
   onRequestRemove,
+  onRestore,
+  storageWarning,
 }: {
   priorities: Priority[];
   onClose: () => void;
   onSelect: (id: string) => void;
   onRename: (id: string, name: string) => void;
   onRequestRemove: (id: string) => void;
+  onRestore: (id: string) => void;
+  storageWarning: ReactNode;
 }) {
   const dialogRef = useDialogFocus<HTMLDivElement>(onClose);
 
@@ -1133,7 +1139,7 @@ function ManageTasksDialog({
         <div className="flex items-start justify-between gap-4 mb-5">
           <div>
             <h2 id="manage-tasks-title" className="font-display text-xl font-bold text-white tracking-wide">Manage priorities</h2>
-            <p className="text-white/60 text-xs mt-1.5 font-medium">Rename, select, or remove priorities here. Adjust metrics from Planet Detail.</p>
+            <p className="text-white/60 text-xs mt-1.5 font-medium">Rename, select, or remove priorities here. Restore completed priorities to your galaxy.</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close dialog" className="w-8 h-8 rounded-full bg-white/5 border border-white/10 text-white/60 flex items-center justify-center hover:text-white hover:bg-white/10 transition-colors">
             <X size={16} />
@@ -1159,8 +1165,8 @@ function ManageTasksDialog({
                   }}
                   className="manage-priority-name min-w-0 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm font-semibold text-white outline-none focus:border-primary/60 transition-colors"
                 />
-                <div className="manage-priority-meta" aria-label={`Score ${getFocusScore(priority)}, ${getFocusScore(priority) > 75 ? 'high focus' : 'in orbit'}`}>
-                  <span>{getFocusScore(priority) > 75 ? 'High focus' : 'In orbit'}</span>
+                <div className="manage-priority-meta" aria-label={`Score ${getFocusScore(priority)}, ${priority.completed ? 'completed' : getFocusScore(priority) > 75 ? 'high focus' : 'in orbit'}`}>
+                  <span>{priority.completed ? 'Completed' : getFocusScore(priority) > 75 ? 'High focus' : 'In orbit'}</span>
                   <span aria-hidden="true">·</span>
                   <span>Score {getFocusScore(priority)}</span>
                 </div>
@@ -1175,13 +1181,14 @@ function ManageTasksDialog({
                 <button
                   type="button"
                   onClick={() => {
+                    if (priority.completed) onRestore(priority.id);
                     onSelect(priority.id);
                     onClose();
                   }}
-                  aria-label={`Select ${priority.name}`}
+                  aria-label={`${priority.completed ? 'Restore' : 'Select'} ${priority.name}`}
                   className="manage-priority-select"
                 >
-                  Select
+                  {priority.completed ? 'Restore' : 'Select'}
                 </button>
                 <button
                   type="button"
@@ -1216,6 +1223,7 @@ function ManageTasksDialog({
             </div>
           ))}
         </div>
+        {storageWarning}
       </motion.div>
     </motion.div>
   );
@@ -2119,7 +2127,10 @@ function CosmosBrightnessControl({
 function FocusGalaxyContainer() {
   const [initialStorage] = useState(readPriorities);
   const [priorities, setPriorities] = useState(initialStorage.priorities);
-  const [selectedId, setSelectedId] = useState<string | null>(initialStorage.priorities[0]?.id ?? null);
+  const activePriorities = useMemo(() => priorities.filter((priority) => !priority.completed), [priorities]);
+  const [saveFailed, setSaveFailed] = useState(false);
+  const [saveAttempt, setSaveAttempt] = useState(0);
+  const [selectedId, setSelectedId] = useState<string | null>(initialStorage.priorities.find((priority) => !priority.completed)?.id ?? null);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isManageOpen, setIsManageOpen] = useState(false);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
@@ -2137,7 +2148,6 @@ function FocusGalaxyContainer() {
   } | null>(null);
   const [panelsOpen, setPanelsOpen] = useState(true);
   const [isZenMode, setIsZenMode] = useState(false);
-  const [completingId, setCompletingId] = useState<string | null>(null);
   const [cosmosBrightness, setCosmosBrightness] = useState(100);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const galaxyAppRef = useRef<HTMLDivElement>(null);
@@ -2146,7 +2156,7 @@ function FocusGalaxyContainer() {
   const { toast } = useToast();
   
   const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const isPlanetFocusOpen = focusSession !== null && priorities.some((priority) => priority.id === focusSession.priorityId);
+  const isPlanetFocusOpen = focusSession !== null && activePriorities.some((priority) => priority.id === focusSession.priorityId);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(MOBILE_VIEWPORT_QUERY);
@@ -2194,8 +2204,13 @@ function FocusGalaxyContainer() {
     if (initialStorage.recoveryBlocked) {
       return;
     }
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(priorities));
-  }, [priorities, initialStorage.recoveryBlocked]);
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(priorities));
+      setSaveFailed(false);
+    } catch {
+      setSaveFailed(true);
+    }
+  }, [priorities, initialStorage.recoveryBlocked, saveAttempt]);
 
   useEffect(() => {
     const galaxy = galaxyAppRef.current;
@@ -2205,10 +2220,10 @@ function FocusGalaxyContainer() {
   }, [isPlanetFocusOpen]);
   
   useEffect(() => {
-    if (selectedId && !priorities.some(p => p.id === selectedId)) {
+    if (selectedId && !activePriorities.some(p => p.id === selectedId)) {
       setSelectedId(null);
     }
-  }, [priorities, selectedId]);
+  }, [activePriorities, selectedId]);
 
   const addPriority = (name: string) => {
     const hues = ['#f04e76', '#9b5be4', '#3aa2f7', '#f1883b', '#466bf0', '#85d852', '#f0c04e', '#4ef0c0'];
@@ -2335,18 +2350,23 @@ function FocusGalaxyContainer() {
   };
 
   const completePriority = (id: string) => {
-    const p = priorities.find(x => x.id === id);
-    if (!p) return;
-    setCompletingId(id);
+    setPriorities((current) => current.map((priority) => priority.id === id
+      ? { ...priority, completed: true }
+      : priority));
+    setFocusSession((current) => current?.priorityId === id ? null : current);
+    setSelectedId((current) => current === id ? null : current);
+    requestAnimationFrame(() => getGalaxyFocusTarget(id)?.focus({ preventScroll: true }));
     playSupernovaChime();
     toast({
-      title: "✦ Orbit Completed",
-      description: `"${p.name}" has been harmonized into your galaxy.`,
+      title: "Orbit Completed",
+      description: "Notes and tasks are preserved. Restore this priority from Manage priorities.",
     });
-    setTimeout(() => {
-      removePriority(id);
-      setCompletingId(null);
-    }, 650);
+  };
+
+  const restorePriority = (id: string) => {
+    setPriorities((current) => current.map((priority) => priority.id === id
+      ? { ...priority, completed: false }
+      : priority));
   };
 
   const requestResetPriorities = () => {
@@ -2379,15 +2399,15 @@ function FocusGalaxyContainer() {
         setIsZenMode(false);
       } else if (e.key === ']' || e.key === 'ArrowRight') {
         e.preventDefault();
-        if (priorities.length === 0) return;
-        const idx = priorities.findIndex(p => p.id === selectedId);
-        const next = priorities[(idx + 1) % priorities.length];
+        if (activePriorities.length === 0) return;
+        const idx = activePriorities.findIndex(p => p.id === selectedId);
+        const next = activePriorities[(idx + 1) % activePriorities.length];
         selectPriority(next.id);
       } else if (e.key === '[' || e.key === 'ArrowLeft') {
         e.preventDefault();
-        if (priorities.length === 0) return;
-        const idx = priorities.findIndex(p => p.id === selectedId);
-        const prev = priorities[(idx - 1 + priorities.length) % priorities.length];
+        if (activePriorities.length === 0) return;
+        const idx = activePriorities.findIndex(p => p.id === selectedId);
+        const prev = activePriorities[(idx - 1 + activePriorities.length) % activePriorities.length];
         selectPriority(prev.id);
       } else if (e.key.toLowerCase() === 'f') {
         e.preventDefault();
@@ -2405,19 +2425,19 @@ function FocusGalaxyContainer() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [priorities, selectedId, isAddOpen, isManageOpen, confirmation, isMobileMenuOpen, isPlanetFocusOpen]);
+  }, [activePriorities, selectedId, isAddOpen, isManageOpen, confirmation, isMobileMenuOpen, isPlanetFocusOpen]);
 
   const rankedPriorities = useMemo(
-    () => [...priorities].sort((a, b) => getFocusScore(b) - getFocusScore(a)),
-    [priorities],
+    () => [...activePriorities].sort((a, b) => getFocusScore(b) - getFocusScore(a)),
+    [activePriorities],
   );
   const topPriorities = rankedPriorities.slice(0, 3);
-  const selectedPriority = priorities.find(p => p.id === selectedId);
-  const focusPriority = focusSession ? priorities.find((p) => p.id === focusSession.priorityId) : undefined;
+  const selectedPriority = activePriorities.find(p => p.id === selectedId);
+  const focusPriority = focusSession ? activePriorities.find((p) => p.id === focusSession.priorityId) : undefined;
   
   const insight = useMemo(() => {
     if (!selectedPriority) {
-      if (priorities.length === 0) return "Space is empty. Add a priority to begin.";
+      if (activePriorities.length === 0) return "Space is empty. Add a priority to begin.";
       if (topPriorities.length > 0 && getFocusScore(topPriorities[0]) > 80) {
         return `${topPriorities[0].name} demands attention. Consider giving it one clear next move.`;
       }
@@ -2428,17 +2448,17 @@ function FocusGalaxyContainer() {
     if (selectedPriority.importance > 8 && selectedPriority.urgency < 5) return `Important but not urgent. Protect time for ${selectedPriority.name} before it becomes an emergency.`;
     if (selectedPriority.energy > 8) return `High effort required. Break ${selectedPriority.name} into smaller pieces to reduce friction.`;
     return `${selectedPriority.name} is steadily in orbit. Adjust its metrics if the situation shifts.`;
-  }, [selectedPriority, topPriorities, priorities.length]);
+  }, [selectedPriority, topPriorities, activePriorities.length]);
 
   const insightTitle = useMemo(() => {
-    if (!priorities.length) return "Field is open.";
+    if (!activePriorities.length) return "Field is open.";
     if (!selectedPriority) {
       return topPriorities[0] && getFocusScore(topPriorities[0]) > 80
         ? "Attention is concentrating."
         : "Field is balanced.";
     }
     return "You're pulled toward action.";
-  }, [selectedPriority, topPriorities, priorities.length]);
+  }, [selectedPriority, topPriorities, activePriorities.length]);
 
   const { mouseX, mouseY, handleMouseMove, handleMouseLeave } = useParallax();
   const panX = useTransform(mouseX, [-0.5, 0.5], [12, -12]);
@@ -2453,6 +2473,14 @@ function FocusGalaxyContainer() {
     '--cosmos-dim-opacity': String(Math.max(0, (100 - cosmosBrightness) / 100 * 0.55)),
     '--cosmos-lift-opacity': String(Math.max(0, (cosmosBrightness - 100) / 30 * 0.32)),
   } as CSSProperties;
+
+  const storageWarning = saveFailed && !initialStorage.recoveryBlocked ? (
+    <aside role="alert" className="priority-recovery-warning" data-testid="priority-save-warning">
+      <p className="focus-toast-title">Changes are not saved</p>
+      <p className="focus-toast-description">Your changes are kept in this session only. Browser storage may be full or unavailable. Free storage and retry before closing or reloading.</p>
+      <button type="button" className="planet-content-primary mt-3" onClick={() => setSaveAttempt((attempt) => attempt + 1)}>Retry save</button>
+    </aside>
+  ) : null;
 
   return (
     <div 
@@ -2631,7 +2659,7 @@ function FocusGalaxyContainer() {
           
           {/* Tilted 3D Orbital Plane */}
           <div className="orbital-plane">
-            <OrbitRings priorities={priorities} />
+            <OrbitRings priorities={activePriorities} />
 
             {selectedPriority && (
                <AnimatePresence>
@@ -2640,14 +2668,14 @@ function FocusGalaxyContainer() {
             )}
 
             <AnimatePresence>
-              {priorities.map((p, i) => (
+              {activePriorities.map((p, i) => (
                 <OrbComponent
                   key={p.id}
                   priority={p}
                   index={i}
                   selectedId={selectedId}
                   onSelect={selectPriority}
-                  isCompleting={p.id === completingId}
+                  isCompleting={false}
                   isFocusModeOpen={isPlanetFocusOpen}
                   prefersReducedMotion={prefersReducedMotion}
                 />
@@ -2658,7 +2686,7 @@ function FocusGalaxyContainer() {
           {/* Living Center of Gravity (YOU / NOW) */}
           <LivingCore
             topPriorities={topPriorities}
-            totalPriorities={priorities.length}
+            totalPriorities={activePriorities.length}
             onSelectTop={() => {
               if (topPriorities[0]) selectPriority(topPriorities[0].id);
             }}
@@ -2753,6 +2781,8 @@ function FocusGalaxyContainer() {
             }}
             onRename={renamePriority}
             onRequestRemove={requestRemovePriority}
+            onRestore={restorePriority}
+            storageWarning={storageWarning}
           />
         )}
         <ConfirmActionDialog
@@ -2762,6 +2792,8 @@ function FocusGalaxyContainer() {
           onClose={() => setConfirmation(null)}
         />
       </AnimatePresence>
+
+      {storageWarning && !isPlanetFocusOpen && !isManageOpen && createPortal(storageWarning, document.body)}
 
       {initialStorage.recoveryBlocked && createPortal(
         <aside role="alert" className="priority-recovery-warning">
@@ -2774,6 +2806,7 @@ function FocusGalaxyContainer() {
       {focusPriority && focusSession && createPortal(
         <PlanetFocusMode
           priority={focusPriority}
+          storageWarning={storageWarning}
           score={getFocusScore(focusPriority)}
           origin={focusSession.origin}
           prefersReducedMotion={prefersReducedMotion}
