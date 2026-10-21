@@ -121,6 +121,8 @@ export function PlanetFocusMode({
     )).filter((element) => element.getClientRects().length > 0);
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      // A storage-conflict reload confirmation owns focus until it closes.
+      if (document.querySelector('[role="alertdialog"]')) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();

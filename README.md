@@ -56,11 +56,15 @@ with remote debugging enabled. Open the app in that profile, then run:
 ```bash
 pnpm --filter @workspace/focus-galaxy run test:planet-storage-content
 pnpm --filter @workspace/focus-galaxy run test:planet-interaction
+pnpm --filter @workspace/focus-galaxy run test:planet-cross-tab
 ```
 
-Both commands default to `APP_URL=http://127.0.0.1:5173/` and `CDP_PORT=9228`;
-set these variables to match your setup. They replace app data in the test
-profile. The interaction suite includes a 130-second orbital observation.
+All three commands default to `APP_URL=http://127.0.0.1:5173/` and `CDP_PORT=9228`;
+set these variables to match your setup. Run the suites serially when sharing a
+CDP browser. The storage/content and interaction checks replace app data in the test
+profile; the cross-tab suite creates disposable browser contexts and downloads test
+session copies into `QA_OUTPUT_DIR` (or a temporary directory). The interaction
+suite includes a 130-second orbital observation.
 
 When invalid saved priorities or entries are rejected, their original stored text
 is retained in localStorage under `focus-galaxy-priorities-v2.corrupt`. Later
@@ -75,10 +79,38 @@ are persisted with the existing storage key. Older records without a completion
 flag remain active. Explicit removal and reset still delete data after confirmation.
 
 If a normal storage write fails, changes stay in memory and a persistent **Changes
-are not saved** warning offers **Retry save**. Retry writes the latest session
-state; the warning clears only after a successful write. Closing or reloading
+are not saved** warning offers **Retry save**. Retry checks the loaded content
+revision before writing the latest session state; the warning clears only after a successful coordinated save. Closing or reloading
 before a successful save can lose session changes. A blocked recovery backup still
 requires freeing storage and reloading; Retry save cannot bypass that safeguard.
+
+Cross-tab saves use the exact stored snapshot bytes as a content revision. An
+exclusive, same-origin [Web Lock](https://www.w3.org/TR/web-locks/) covers the
+revision comparison, any recovery backup, and the snapshot write. This serializes
+cooperating tabs without migrating the stored array or introducing a second
+revision key that could become inconsistent after a failed write. Each tab tracks
+what it loaded or last saved successfully. Failed writes never advance that
+revision; retries use the same protection. Obsolete queued saves are cancelled.
+
+Storage events and resume/focus checks surface external changes. A changed
+revision blocks writes and keeps session edits in memory. **Download session
+copy** exports added notes/tasks and priority changes as JSON; unfinished input
+drafts are not included. **Load latest saved version** requires confirmation
+before discarding session edits and reloading. Conflicting data is never merged
+or overwritten automatically.
+
+A clean stored snapshot is not rewritten on hydration. Necessary initialization
+or legacy normalization is guarded by the same locked revision check. Recovery
+copies are made only after that check and before replacement; failed initial
+reads or failed recovery backups keep persistence blocked until reload.
+
+Safe saving requires Web Locks (HTTPS or a trustworthy local origin). If the API
+is missing or unavailable, the app never falls back to an uncoordinated write;
+it retains session edits and offers a session copy. **Guarantees apply only to
+tabs running this coordination protocol.** An already-open older version, an
+extension, or another writer that ignores the lock can still race with or replace
+storage. Reload older app tabs before relying on cross-tab protection. Physical
+browser/device coverage must be verified separately.
 
 ## Deploy on Cloudflare Workers
 

@@ -311,6 +311,12 @@ async function main() {
       await evaluate(`document.querySelector('[aria-label="Return to galaxy"]').focus()`);
       await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, modifiers: 8 });
       await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, modifiers: 8 });
+      assert.ok(await evaluate(`!!document.activeElement?.closest('[data-testid="priority-save-warning"]')`));
+      // The session-copy action is last in the warning; Shift+Tab reaches Retry.
+      if (await evaluate(`document.activeElement?.textContent !== 'Retry save'`)) {
+        await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, modifiers: 8 });
+        await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, modifiers: 8 });
+      }
       assert.equal(await evaluate(`document.activeElement?.textContent`), 'Retry save');
       await evaluate('window.qaBlockWrites = false');
       await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
@@ -415,18 +421,22 @@ async function main() {
     await openFocus();
     await input('textarea[aria-label="New note for Review A"]', '  New note  ');
     await click('.planet-content-compose button[type="submit"]');
+    await waitFor(`JSON.parse(localStorage.getItem(${JSON.stringify(key)}))[0].entries.some(entry => entry.text === 'New note')`);
     assert.ok((await saved())[0].entries.some((entry) => entry.text === 'New note'));
     await click('[aria-label="Edit note"]');
     await input('textarea[aria-label="Edit note"]', '  Edited note  ');
     await click('[aria-label="Save note changes"]');
+    await waitFor(`JSON.parse(localStorage.getItem(${JSON.stringify(key)}))[0].entries.some(entry => entry.text === 'Edited note')`);
     assert.ok((await saved())[0].entries.some((entry) => entry.text === 'Edited note'));
     await click('[aria-label="Edit task"]');
     await input('input[aria-label="Edit task"]', '  Edited task  ');
     await click('[aria-label="Save task changes"]');
+    await waitFor(`JSON.parse(localStorage.getItem(${JSON.stringify(key)}))[0].entries.some(entry => entry.text === 'Edited task')`);
     assert.ok((await saved())[0].entries.some((entry) => entry.text === 'Edited task'));
     await click('.planet-content-switch button:last-child');
     await input('input[aria-label="New task for Review A"]', '  New task  ');
     await click('.planet-content-task-compose button[type="submit"]');
+    await waitFor(`JSON.parse(localStorage.getItem(${JSON.stringify(key)}))[0].entries.some(entry => entry.text === 'New task')`);
     assert.ok((await saved())[0].entries.some((entry) => entry.text === 'New task'));
   });
 

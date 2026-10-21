@@ -9,7 +9,8 @@
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:planet-interaction": "node scripts/planet-interaction-regression.mjs",
-    "test:planet-storage-content": "node scripts/planet-storage-content-regression.mjs"
+    "test:planet-storage-content": "node scripts/planet-storage-content-regression.mjs",
+    "test:planet-cross-tab": "node scripts/planet-cross-tab-regression.mjs"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",

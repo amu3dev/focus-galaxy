@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, memo, type CSSProperties, type ReactNode, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { PRIORITY_STORAGE_KEY, usePriorityPersistence } from '@/hooks/use-priority-persistence';
 import { Plus, RotateCcw, X, Target, Activity, Orbit, Trash2, ListChecks, Volume2, VolumeX, Music2, CheckCircle2, ChevronDown, ChevronUp, SunMedium, MoreHorizontal } from 'lucide-react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
@@ -55,9 +56,10 @@ type Confirmation = {
   description: string;
   confirmLabel: string;
   onConfirm: () => void;
+  layer?: 'storage';
 };
 
-const STORAGE_KEY = 'focus-galaxy-priorities-v2';
+const STORAGE_KEY = PRIORITY_STORAGE_KEY;
 const MOBILE_VIEWPORT_QUERY = '(max-width: 767px), (max-width: 1024px) and (max-height: 560px)';
 const SPOTIFY_SESSION_KEY = 'focus-galaxy-spotify-session';
 const SPOTIFY_VERIFIER_KEY = 'focus-galaxy-spotify-verifier';
@@ -357,34 +359,23 @@ function getSubLabel(name: string) {
   return map[name] || 'ORBITING';
 }
 
-type PriorityStorageState = { priorities: Priority[]; recoveryBlocked: boolean };
-
-function backUpRejectedPriorities(saved: string): boolean {
-  try {
-    // Keep earlier recovery copies, and avoid duplicating the same payload.
-    let key = `${STORAGE_KEY}.corrupt`;
-    let suffix = 1;
-    let existing = window.localStorage.getItem(key);
-    while (existing !== null && existing !== saved) {
-      key = `${STORAGE_KEY}.corrupt-${suffix++}`;
-      existing = window.localStorage.getItem(key);
-    }
-    if (existing === null) window.localStorage.setItem(key, saved);
-    return true;
-  } catch {
-    return false;
-  }
-}
+type PriorityStorageState = {
+  priorities: Priority[];
+  // The exact persisted bytes are a collision-free content revision. Undefined
+  // means the read failed; null is a successfully read, absent storage key.
+  snapshot: string | null | undefined;
+  needsRecovery: boolean;
+};
 
 function readPriorities(): PriorityStorageState {
-  if (typeof window === 'undefined') return { priorities: seedPriorities, recoveryBlocked: false };
+  if (typeof window === 'undefined') return { priorities: seedPriorities, snapshot: null, needsRecovery: false };
   let saved: string | null = null;
   try {
     saved = window.localStorage.getItem(STORAGE_KEY);
-    if (saved === null) return { priorities: seedPriorities, recoveryBlocked: false };
+    if (saved === null) return { priorities: seedPriorities, snapshot: null, needsRecovery: false };
     const parsed: unknown = JSON.parse(saved);
     if (!Array.isArray(parsed)) {
-      return { priorities: seedPriorities, recoveryBlocked: !backUpRejectedPriorities(saved) };
+      return { priorities: seedPriorities, snapshot: saved, needsRecovery: true };
     }
 
     const validPriorities = parsed.filter(isPriority);
@@ -392,7 +383,6 @@ function readPriorities(): PriorityStorageState {
       (priority.entries !== undefined && (!Array.isArray(priority.entries) || priority.entries.some((entry) => !isPlanetEntry(entry))))
       || (priority.notes !== undefined && typeof priority.notes !== 'string'),
     );
-    const recoveryBlocked = hasRejectedData && !backUpRejectedPriorities(saved);
     const originalIds = new Set(validPriorities.map((priority) => priority.id));
     const normalizedIds = new Set<string>();
     const priorities = validPriorities.flatMap((candidate): Priority[] => {
@@ -450,9 +440,9 @@ function readPriorities(): PriorityStorageState {
 
       return [{ ...currentPriority, entries }];
     });
-    return { priorities, recoveryBlocked };
+    return { priorities, snapshot: saved, needsRecovery: hasRejectedData };
   } catch {
-    return { priorities: seedPriorities, recoveryBlocked: saved === null || !backUpRejectedPriorities(saved) };
+    return { priorities: seedPriorities, snapshot: saved ?? undefined, needsRecovery: saved !== null };
   }
 }
 
@@ -1241,7 +1231,7 @@ function ConfirmActionDialog({
   return (
     <AlertDialog open={Boolean(confirmation)} onOpenChange={(open) => { if (!open) onClose(); }}>
       <AlertDialogContent
-        className="focus-confirm-content"
+        className={`focus-confirm-content${confirmation?.layer === 'storage' ? ' storage-reload-confirm' : ''}`}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           requestAnimationFrame(() => {
@@ -2128,8 +2118,10 @@ function FocusGalaxyContainer() {
   const [initialStorage] = useState(readPriorities);
   const [priorities, setPriorities] = useState(initialStorage.priorities);
   const activePriorities = useMemo(() => priorities.filter((priority) => !priority.completed), [priorities]);
-  const [saveFailed, setSaveFailed] = useState(false);
-  const [saveAttempt, setSaveAttempt] = useState(0);
+  const { status: persistenceStatus, retry: retrySave } = usePriorityPersistence(
+    priorities, initialStorage.snapshot, initialStorage.needsRecovery,
+  );
+  const [exportFailed, setExportFailed] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(initialStorage.priorities.find((priority) => !priority.completed)?.id ?? null);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isManageOpen, setIsManageOpen] = useState(false);
@@ -2200,17 +2192,6 @@ function FocusGalaxyContainer() {
     if (!isMobileViewport) setIsMobileInsightsOpen(false);
   }, [isMobileViewport]);
 
-  useEffect(() => {
-    if (initialStorage.recoveryBlocked) {
-      return;
-    }
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(priorities));
-      setSaveFailed(false);
-    } catch {
-      setSaveFailed(true);
-    }
-  }, [priorities, initialStorage.recoveryBlocked, saveAttempt]);
 
   useEffect(() => {
     const galaxy = galaxyAppRef.current;
@@ -2474,11 +2455,58 @@ function FocusGalaxyContainer() {
     '--cosmos-lift-opacity': String(Math.max(0, (cosmosBrightness - 100) / 30 * 0.32)),
   } as CSSProperties;
 
-  const storageWarning = saveFailed && !initialStorage.recoveryBlocked ? (
-    <aside role="alert" className="priority-recovery-warning" data-testid="priority-save-warning">
-      <p className="focus-toast-title">Changes are not saved</p>
-      <p className="focus-toast-description">Your changes are kept in this session only. Browser storage may be full or unavailable. Free storage and retry before closing or reloading.</p>
-      <button type="button" className="planet-content-primary mt-3" onClick={() => setSaveAttempt((attempt) => attempt + 1)}>Retry save</button>
+  const downloadSession = () => {
+    try {
+      const url = URL.createObjectURL(new Blob([JSON.stringify(priorities, null, 2)], { type: 'application/json' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `focus-galaxy-session-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setExportFailed(false);
+    } catch {
+      setExportFailed(true);
+    }
+  };
+
+  const requestLoadLatest = () => openConfirmation({
+    title: 'Load latest saved galaxy?',
+    description: 'This discards this tab’s unsaved changes and unfinished input drafts. Download a session copy first to keep added notes, tasks, and priority changes. Unfinished input drafts are not included in that copy.',
+    confirmLabel: 'Discard and reload',
+    layer: 'storage',
+    onConfirm: () => window.location.reload(),
+  });
+
+  const storageProblem = persistenceStatus === 'conflict' || persistenceStatus === 'error'
+    || persistenceStatus === 'unavailable' || persistenceStatus === 'recovery-blocked';
+  const storageWarning = storageProblem ? (
+    <aside role="alert" className="priority-recovery-warning" data-testid={
+      persistenceStatus === 'conflict' ? 'priority-conflict-warning'
+        : persistenceStatus === 'error' ? 'priority-save-warning' : 'priority-recovery-warning'
+    }>
+      <p className="focus-toast-title">{
+        persistenceStatus === 'conflict' ? 'Newer changes exist in another tab'
+          : persistenceStatus === 'unavailable' ? 'Saving is unavailable in this browser'
+            : persistenceStatus === 'recovery-blocked' ? 'Saved data needs recovery' : 'Changes are not saved'
+      }</p>
+      <p className="focus-toast-description">{
+        persistenceStatus === 'conflict'
+          ? 'This tab’s changes are kept in memory and have not been saved. Saving is blocked to protect the latest saved version. Download a session copy before reloading.'
+          : persistenceStatus === 'unavailable'
+            ? 'This browser cannot safely coordinate saves between tabs. Your changes are kept only in this session. Download a session copy before closing.'
+            : persistenceStatus === 'recovery-blocked'
+              ? 'Your original data is unchanged; changes in this session will not be saved. Free browser storage and reload to retry recovery.'
+              : 'Your changes are kept in this session only. Browser storage may be full or unavailable. Free storage and retry before closing or reloading.'
+      }</p>
+      <div className="storage-warning-actions">
+        {persistenceStatus === 'error' && <button type="button" className="planet-content-primary" onClick={retrySave}>Retry save</button>}
+        <button type="button" className="planet-content-primary" onClick={downloadSession}>Download session copy</button>
+        {persistenceStatus === 'conflict' && <button type="button" className="planet-content-primary" onClick={requestLoadLatest}>Load latest saved version</button>}
+      </div>
+      {persistenceStatus === 'conflict' && <p className="focus-toast-description">The copy includes added content, but not unfinished input drafts.</p>}
+      {exportFailed && <p className="focus-toast-description">The copy could not be downloaded. Keep this tab open and copy your unsaved content before reloading.</p>}
     </aside>
   ) : null;
 
@@ -2795,13 +2823,6 @@ function FocusGalaxyContainer() {
 
       {storageWarning && !isPlanetFocusOpen && !isManageOpen && createPortal(storageWarning, document.body)}
 
-      {initialStorage.recoveryBlocked && createPortal(
-        <aside role="alert" className="priority-recovery-warning">
-          <p className="focus-toast-title">Saved data needs recovery</p>
-          <p className="focus-toast-description">A recovery copy could not be saved. Your original data is unchanged; changes in this session will not be saved. Free browser storage and reload to retry.</p>
-        </aside>,
-        document.body,
-      )}
 
       {focusPriority && focusSession && createPortal(
         <PlanetFocusMode
