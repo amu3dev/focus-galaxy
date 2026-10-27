@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, memo, type CSSProperties, type ReactNode, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { createId } from '@/lib/utils';
 import { PRIORITY_STORAGE_KEY, usePriorityPersistence } from '@/hooks/use-priority-persistence';
 import { Plus, RotateCcw, X, Target, Activity, Orbit, Trash2, ListChecks, Volume2, VolumeX, Music2, CheckCircle2, ChevronDown, ChevronUp, SunMedium, MoreHorizontal } from 'lucide-react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -2212,7 +2213,7 @@ function FocusGalaxyContainer() {
   const addPriority = (name: string) => {
     const hues = ['#f04e76', '#9b5be4', '#3aa2f7', '#f1883b', '#466bf0', '#85d852', '#f0c04e', '#4ef0c0'];
     const newP: Priority = {
-      id: crypto.randomUUID(),
+      id: createId(),
       name,
       importance: 5,
       urgency: 5,
@@ -2236,8 +2237,8 @@ function FocusGalaxyContainer() {
   const createPlanetEntry = (id: string, type: PlanetEntryType, text: string) => {
     const now = Date.now();
     const entry: PlanetEntry = type === 'note'
-      ? { id: crypto.randomUUID(), type, text, createdAt: now, updatedAt: now }
-      : { id: crypto.randomUUID(), type, text, completed: false, createdAt: now, updatedAt: now };
+      ? { id: createId(), type, text, createdAt: now, updatedAt: now }
+      : { id: createId(), type, text, completed: false, createdAt: now, updatedAt: now };
     setPriorities(prev => prev.map(priority => priority.id === id
       ? { ...priority, entries: [...(priority.entries ?? []), entry] }
       : priority));
