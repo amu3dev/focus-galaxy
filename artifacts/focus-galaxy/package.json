@@ -10,7 +10,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:planet-interaction": "node scripts/planet-interaction-regression.mjs",
     "test:planet-storage-content": "node scripts/planet-storage-content-regression.mjs",
-    "test:planet-cross-tab": "node scripts/planet-cross-tab-regression.mjs"
+    "test:planet-cross-tab": "node scripts/planet-cross-tab-regression.mjs",
+    "test:center-geometry": "QA_SUITE=geometry node scripts/galaxy-ux-regression.mjs",
+    "test:notification-obstruction": "QA_SUITE=notifications node scripts/galaxy-ux-regression.mjs",
+    "test:mobile-warning": "QA_SUITE=warning node scripts/galaxy-ux-regression.mjs",
+    "test:storage-warning-accessibility": "node scripts/storage-warning-accessibility-regression.mjs"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -79,6 +79,7 @@ async function evaluate(expression) {
 }
 
 async function navigateFresh() {
+  await send('Page.bringToFront');
   await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
   // Clear before app code executes so stale state cannot contaminate this run.
   await send('Page.addScriptToEvaluateOnNewDocument', { source: `
@@ -245,7 +246,14 @@ async function findSelectablePoint(snapshot, id) {
           };
         })
         .sort((a, b) => a.distance - b.distance)[0];
-      if (document.elementFromPoint(x, y) === hit && nearest?.id === ${JSON.stringify(id)}) return { x, y, offset: [ox, oy], expectedId: ${JSON.stringify(id)} };
+      // Keep outside overlapping hit-circle edges: orbital motion between CDP
+      // press/release can otherwise change targets and click their common parent.
+      const clearOfOtherEdges = [...document.querySelectorAll('.orb-screen-hit')].every(candidate => {
+        if (candidate === hit) return true;
+        const r = candidate.getBoundingClientRect();
+        return Math.hypot(x-r.x-r.width/2, y-r.y-r.height/2) > r.width/2 + 4;
+      });
+      if (document.elementFromPoint(x, y) === hit && nearest?.id === ${JSON.stringify(id)} && clearOfOtherEdges) return { x, y, offset: [ox, oy], expectedId: ${JSON.stringify(id)} };
     }
     return null;
   })()`);

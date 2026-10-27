@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { CDP, click as hitClick } from './cdp-harness.mjs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
@@ -24,57 +25,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let browser;
 let activeTabs = [];
 
-class CDP {
-  constructor(socket) {
-    this.socket = socket;
-    this.nextId = 0;
-    this.pending = new Map();
-    this.errors = [];
-    this.downloadEvents = [];
-    socket.addEventListener('message', ({ data }) => {
-      const event = JSON.parse(data);
-      if (event.method?.startsWith('Browser.download')) this.downloadEvents.push(event);
-      const request = this.pending.get(event.id);
-      if (request) {
-        this.pending.delete(event.id);
-        clearTimeout(request.timeout);
-        if (event.error) request.reject(new Error(event.error.message));
-        else request.resolve(event.result);
-      }
-      if (event.method === 'Runtime.exceptionThrown') this.errors.push(event.params.exceptionDetails.exception?.description || event.params.exceptionDetails.text);
-      if (event.method === 'Runtime.consoleAPICalled' && event.params.type === 'error') this.errors.push(event.params.args.map((arg) => arg.value ?? arg.description).join(' '));
-    });
-    socket.addEventListener('close', () => {
-      for (const request of this.pending.values()) { clearTimeout(request.timeout); request.reject(new Error('CDP closed')); }
-      this.pending.clear();
-    });
-  }
-  static async connect(url) {
-    const socket = new WebSocket(url);
-    await new Promise((resolve, reject) => { socket.addEventListener('open', resolve, { once: true }); socket.addEventListener('error', reject, { once: true }); });
-    return new CDP(socket);
-  }
-  send(method, params = {}) {
-    return new Promise((resolve, reject) => {
-      const id = ++this.nextId;
-      const timeout = setTimeout(() => { this.pending.delete(id); reject(new Error(`CDP timeout: ${method}`)); }, 15000);
-      this.pending.set(id, { resolve, reject, timeout });
-      this.socket.send(JSON.stringify({ id, method, params }));
-    });
-  }
-  async evaluate(expression) {
-    const result = await this.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true, userGesture: true });
-    if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
-    return result.result?.value;
-  }
-  async wait(expression) {
-    const deadline = Date.now() + 10000;
-    while (Date.now() < deadline) { if (await this.evaluate(expression)) return; await sleep(50); }
-    throw new Error(`Timed out: ${expression}`);
-  }
-  close() { this.socket.close(); }
-}
-
+// Transport shared with touch and geometry regressions.
 async function tab(context, { seedRaw, ignoreEvents = false, noLocks = false, rejectLocks = false, denyRead = false, blockBackup = false, width = 1440, height = 900 } = {}) {
   const { targetId } = await browser.send('Target.createTarget', { url: 'about:blank', browserContextId: context });
   const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
@@ -114,7 +65,24 @@ async function tab(context, { seedRaw, ignoreEvents = false, noLocks = false, re
 const stored = (t) => t.evaluate(`JSON.parse(localStorage.getItem(${JSON.stringify(key)}))`);
 const writes = (t) => t.evaluate(`window.qaWrites.filter(entry => entry.name === ${JSON.stringify(key)}).length`);
 const conflict = (t) => t.wait(`!!document.querySelector('[data-testid="priority-conflict-warning"]')`);
-async function press(t, selector) { await t.wait(`!!document.querySelector(${JSON.stringify(selector)})`); await t.evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`); }
+async function openWarning(t) {
+  if (await t.evaluate(`document.querySelector('.priority-recovery-warning')?.matches(':not(:popover-open)')`)) {
+    await t.evaluate(`document.querySelector('.storage-warning-indicator').scrollIntoView({block:'center'})`);
+    await hitClick(t, '.storage-warning-indicator');
+    await t.wait(`document.querySelector('.priority-recovery-warning')?.matches(':popover-open')`);
+  }
+}
+async function press(t, selector) {
+  await t.wait(`!!document.querySelector(${JSON.stringify(selector)})`);
+  if (/priority-(conflict|save|recovery)-warning|focus-confirm-/.test(selector)) {
+    await t.send('Page.bringToFront');
+    if (selector.includes('warning')) await openWarning(t);
+    await t.wait(`(()=>{const e=document.querySelector(${JSON.stringify(selector)})?.closest('[role="alertdialog"]');return !e || e.getAnimations().every(a=>a.playState!=='running')})()`);
+    await t.evaluate(`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({block:'center'})`);
+    await t.wait(`(()=>{const e=document.querySelector(${JSON.stringify(selector)}),r=e?.getBoundingClientRect();return !!r?.width && e.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2))})()`);
+    await hitClick(t, selector);
+  } else await t.evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
+}
 async function input(t, selector, text) {
   await t.wait(`!!document.querySelector(${JSON.stringify(selector)})`);
   await t.evaluate(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); Object.getOwnPropertyDescriptor(e.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value').set.call(e, ${JSON.stringify(text)}); e.dispatchEvent(new Event('input', {bubbles:true})); })()`);
@@ -322,6 +290,7 @@ async function main() {
     await b.send('Page.bringToFront');
     await b.wait(`Number(getComputedStyle(document.querySelector('[data-testid="planet-focus-mode"]')).opacity) > .99`);
     await conflict(b);
+    await openWarning(b);
     await b.evaluate(`document.querySelector('[data-testid="priority-conflict-warning"] .storage-warning-actions button:last-child').scrollIntoView({block:'nearest'})`);
     await sleep(100);
     assert.ok(await b.evaluate(`(() => {const e=document.querySelector('[data-testid="priority-conflict-warning"] .storage-warning-actions button:last-child'),r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight&&e.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));})()`));
@@ -338,6 +307,7 @@ async function main() {
     assert.ok(await b.evaluate(`(() => {const e=document.querySelector('.focus-confirm-cancel'),r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight&&e.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));})()`));
     await press(b, '.focus-confirm-cancel'); await conflict(b); assert.equal(await writes(b), 0);
   });
+  assert.equal(results.length,19,'Every cross-tab case ran');
   const summary = { passed: results.filter((r) => r.status === 'PASS').length, failed: results.filter((r) => r.status === 'FAIL').length, results };
   console.log(JSON.stringify(summary, null, 2));
   if (output) await writeFile(path.join(output, 'cross-tab-results.json'), JSON.stringify(summary, null, 2));

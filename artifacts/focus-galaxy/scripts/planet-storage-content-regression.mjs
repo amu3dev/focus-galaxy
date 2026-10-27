@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 // Uses the same isolated Chrome/CDP setup as test:planet-interaction.
@@ -45,6 +45,7 @@ async function waitFor(expression) {
 }
 
 async function load(value, width = 1440, height = 900, options = {}) {
+  await send('Page.bringToFront');
   await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
   const { identifier } = await send('Page.addScriptToEvaluateOnNewDocument', {
     source: `localStorage.setItem(${JSON.stringify(key)}, ${JSON.stringify(options.raw ?? JSON.stringify(value))});
@@ -71,6 +72,8 @@ async function escape() {
 }
 
 async function click(selector) {
+  const closedWarning = await evaluate(`document.querySelector(${JSON.stringify(selector)})?.closest('[popover]')?.matches(':not(:popover-open)')`);
+  if (closedWarning) await click('.storage-warning-indicator');
   let position;
   const deadline = Date.now() + 5000;
   while (Date.now() < deadline && !position) {
@@ -101,13 +104,14 @@ async function click(selector) {
     }
     if (!position) await sleep(100);
   }
-  assert.ok(position, `No visible hit-test target: ${selector}`);
+  assert.ok(position, `No visible hit-test target: ${selector}; ${position ? '' : JSON.stringify(await evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)}),r=e?.getBoundingClientRect();return {rect:r?.toJSON(),hit:r?document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.outerHTML.slice(0,350):null,count:document.querySelectorAll(${JSON.stringify(selector)}).length}})()`))}`);
   await send('Input.dispatchMouseEvent', { type: 'mousePressed', button: 'left', clickCount: 1, ...position });
   await send('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'left', clickCount: 1, ...position });
 }
 
 async function screenshot(name) {
   if (!process.env.QA_OUTPUT_DIR) return;
+  await mkdir(process.env.QA_OUTPUT_DIR, { recursive: true });
   const result = await send('Page.captureScreenshot', { format: 'png' });
   await writeFile(path.join(process.env.QA_OUTPUT_DIR, `${name}.png`), Buffer.from(result.data, 'base64'));
 }
@@ -258,8 +262,10 @@ async function main() {
     await load(seed);
     await evaluate(`(() => {
       window.qaBlockWrites = true;
+      window.qaWriteAttempts = 0;
       const original = Storage.prototype.setItem;
       Storage.prototype.setItem = function(name, value) {
+        if (name === ${JSON.stringify(key)}) window.qaWriteAttempts++;
         if (name === ${JSON.stringify(key)} && window.qaBlockWrites) throw new DOMException('Storage denied', 'SecurityError');
         return original.call(this, name, value);
       };
@@ -272,6 +278,8 @@ async function main() {
     await waitFor(`!!document.querySelector('[aria-label="Restore Review A"]')`);
     await click('[aria-label="Restore Review A"]');
     await waitFor(`document.querySelectorAll('.orb-screen-hit').length === 2`);
+    await waitFor(`window.qaWriteAttempts >= 2 && !!document.querySelector('[data-testid="priority-save-warning"]')`);
+    await waitFor(`!document.querySelector('.manage-dialog')`);
     assert.ok(await evaluate(`!!document.querySelector('[data-testid="priority-save-warning"]')`));
     await evaluate('window.qaBlockWrites = false');
     await click('[data-testid="priority-save-warning"] button');
@@ -300,23 +308,27 @@ async function main() {
       assert.equal(await evaluate(`document.querySelector('[data-testid="planet-focus-mode"]').innerText.includes('Note saved')`), false);
       await click('[data-testid="priority-save-warning"] button');
       assert.ok(await evaluate(`!!document.querySelector('[data-testid="priority-save-warning"]')`));
+      await click('.storage-warning-close');
       await input('textarea[aria-label="New note for Review A"]', 'Unsaved latest note');
       await click('.planet-content-compose button[type="submit"]');
+      await click('.storage-warning-indicator');
       assert.ok(await evaluate(`(() => {
         const rect = document.querySelector('[data-testid="priority-save-warning"] button').getBoundingClientRect();
-        return rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight;
+        return rect.width > 0 && rect.height > 0 && rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight;
       })()`));
       await screenshot(`unsaved-${width}`);
-      // Shift+Tab from the first modal control must reach Retry save.
+      await click('.storage-warning-close');
+      // Hidden popover controls must not enter the modal tab order. The compact
+      // indicator is last; keyboard activation then reveals Retry save.
       await evaluate(`document.querySelector('[aria-label="Return to galaxy"]').focus()`);
       await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, modifiers: 8 });
       await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, modifiers: 8 });
-      assert.ok(await evaluate(`!!document.activeElement?.closest('[data-testid="priority-save-warning"]')`));
-      // The session-copy action is last in the warning; Shift+Tab reaches Retry.
-      if (await evaluate(`document.activeElement?.textContent !== 'Retry save'`)) {
-        await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, modifiers: 8 });
-        await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, modifiers: 8 });
-      }
+      assert.ok(await evaluate(`document.activeElement?.matches('.storage-warning-indicator')`));
+      await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+      await waitFor(`document.querySelector('[popover]')?.matches(':popover-open')`);
+      await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
       assert.equal(await evaluate(`document.activeElement?.textContent`), 'Retry save');
       await evaluate('window.qaBlockWrites = false');
       await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
@@ -356,6 +368,8 @@ async function main() {
       await screenshot(`restore-${width}`);
       await click('[aria-label="Restore Review A"]');
       await waitFor(`document.querySelectorAll('.orb-screen-hit').length === 1`);
+      // UI restoration precedes the asynchronous Web Lock write.
+      await waitFor(`JSON.parse(localStorage.getItem(${JSON.stringify(key)}))[0].completed === false`);
       assert.equal((await saved())[0].completed, false);
       assert.deepEqual((await saved())[0].entries, seed[0].entries);
       await send('Page.reload');
@@ -475,6 +489,7 @@ async function main() {
       await waitFor(`!document.querySelector('[data-testid="planet-focus-mode"]')`);
     });
   }
+  assert.equal(results.length,22,'Every storage/content case ran');
   console.log(JSON.stringify({ passed: results.length, runtimeErrors: errors }));
 }
 

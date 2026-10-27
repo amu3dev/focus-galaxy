@@ -1026,7 +1026,7 @@ function useDialogFocus<T extends HTMLElement>(onClose: () => void) {
 
     const getFocusable = () => Array.from(dialog.querySelectorAll<HTMLElement>(
       'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"]):not([disabled])'
-    ));
+    )).filter((element) => element.getClientRects().length > 0);
 
     if (!dialog.contains(document.activeElement)) {
       (getFocusable()[0] || dialog).focus();
@@ -2037,6 +2037,8 @@ function LivingCore({
   return (
     <motion.div
       className="core-container w-[132px] h-[132px] md:w-[150px] md:h-[150px] z-10"
+      // Motion owns this transform, including centering during hover/tap scaling.
+      style={{ x: '-50%', y: '-50%' }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={onSelectTop}
@@ -2122,6 +2124,7 @@ function FocusGalaxyContainer() {
     priorities, initialStorage.snapshot, initialStorage.needsRecovery,
   );
   const [exportFailed, setExportFailed] = useState(false);
+  const sessionExportCount = useRef(0);
   const [selectedId, setSelectedId] = useState<string | null>(initialStorage.priorities.find((priority) => !priority.completed)?.id ?? null);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isManageOpen, setIsManageOpen] = useState(false);
@@ -2460,7 +2463,7 @@ function FocusGalaxyContainer() {
       const url = URL.createObjectURL(new Blob([JSON.stringify(priorities, null, 2)], { type: 'application/json' }));
       const link = document.createElement('a');
       link.href = url;
-      link.download = `focus-galaxy-session-${new Date().toISOString().slice(0, 10)}.json`;
+      link.download = `focus-galaxy-session-${new Date().toISOString().replace(/[:.]/g, '-')}-${++sessionExportCount.current}.json`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -2471,26 +2474,35 @@ function FocusGalaxyContainer() {
     }
   };
 
-  const requestLoadLatest = () => openConfirmation({
-    title: 'Load latest saved galaxy?',
-    description: 'This discards this tab’s unsaved changes and unfinished input drafts. Download a session copy first to keep added notes, tasks, and priority changes. Unfinished input drafts are not included in that copy.',
-    confirmLabel: 'Discard and reload',
-    layer: 'storage',
-    onConfirm: () => window.location.reload(),
-  });
+  const requestLoadLatest = () => {
+    const details = document.getElementById('priority-storage-details');
+    details?.hidePopover();
+    details?.parentElement?.querySelector<HTMLElement>('.storage-warning-indicator')?.focus({ preventScroll: true });
+    openConfirmation({
+      title: 'Load latest saved galaxy?',
+      description: 'This discards this tab’s unsaved changes and unfinished input drafts. Download a session copy first to keep added notes, tasks, and priority changes. Unfinished input drafts are not included in that copy.',
+      confirmLabel: 'Discard and reload',
+      layer: 'storage',
+      onConfirm: () => window.location.reload(),
+    });
+  };
 
   const storageProblem = persistenceStatus === 'conflict' || persistenceStatus === 'error'
     || persistenceStatus === 'unavailable' || persistenceStatus === 'recovery-blocked';
+  const storageTitle = persistenceStatus === 'conflict' ? 'Newer changes exist in another tab'
+    : persistenceStatus === 'unavailable' ? 'Saving is unavailable in this browser'
+      : persistenceStatus === 'recovery-blocked' ? 'Saved data needs recovery' : 'Changes are not saved';
   const storageWarning = storageProblem ? (
-    <aside role="alert" className="priority-recovery-warning" data-testid={
+    <div className="storage-warning">
+      <button type="button" className="storage-warning-indicator" popoverTarget="priority-storage-details">
+        <span role="status">Changes are not saved<span className="sr-only">. {storageTitle}. Changes stay in this session only. Download a session copy before closing.</span></span>
+        <span>Details & export</span>
+      </button>
+    <aside popover="auto" id="priority-storage-details" aria-label="Saving details" className="priority-recovery-warning" data-testid={
       persistenceStatus === 'conflict' ? 'priority-conflict-warning'
         : persistenceStatus === 'error' ? 'priority-save-warning' : 'priority-recovery-warning'
     }>
-      <p className="focus-toast-title">{
-        persistenceStatus === 'conflict' ? 'Newer changes exist in another tab'
-          : persistenceStatus === 'unavailable' ? 'Saving is unavailable in this browser'
-            : persistenceStatus === 'recovery-blocked' ? 'Saved data needs recovery' : 'Changes are not saved'
-      }</p>
+      <p className="focus-toast-title">{storageTitle}</p>
       <p className="focus-toast-description">{
         persistenceStatus === 'conflict'
           ? 'This tab’s changes are kept in memory and have not been saved. Saving is blocked to protect the latest saved version. Download a session copy before reloading.'
@@ -2506,8 +2518,10 @@ function FocusGalaxyContainer() {
         {persistenceStatus === 'conflict' && <button type="button" className="planet-content-primary" onClick={requestLoadLatest}>Load latest saved version</button>}
       </div>
       {persistenceStatus === 'conflict' && <p className="focus-toast-description">The copy includes added content, but not unfinished input drafts.</p>}
-      {exportFailed && <p className="focus-toast-description">The copy could not be downloaded. Keep this tab open and copy your unsaved content before reloading.</p>}
+      {exportFailed && <p className="focus-toast-description" role="alert">The copy could not be downloaded. Keep this tab open and copy your unsaved content before reloading.</p>}
+      <button type="button" className="storage-warning-close" popoverTarget="priority-storage-details" popoverTargetAction="hide">Close saving details</button>
     </aside>
+    </div>
   ) : null;
 
   return (
@@ -2516,6 +2530,15 @@ function FocusGalaxyContainer() {
       className={`focus-galaxy-app relative w-full h-[100dvh] overflow-hidden bg-background select-none${isMobileViewport ? ' mobile-ui-viewport' : ''} ${isZenMode ? 'zen-mode' : ''}${isMobileViewport && isSelectedPanelExpanded ? ' mobile-detail-expanded' : ''}`}
       style={cosmosVisualStyle}
       aria-hidden={isPlanetFocusOpen}
+      onKeyDownCapture={(event) => {
+        if (event.key !== 'Escape') return;
+        const details = document.querySelector<HTMLElement>('#priority-storage-details:popover-open');
+        if (!details) return;
+        event.preventDefault();
+        event.stopPropagation();
+        details.hidePopover();
+        details.parentElement?.querySelector<HTMLElement>('.storage-warning-indicator')?.focus({ preventScroll: true });
+      }}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
     >
@@ -2597,6 +2620,8 @@ function FocusGalaxyContainer() {
             </button>
           </div>
         </div>
+        {storageWarning && !isPlanetFocusOpen && !isManageOpen && storageWarning}
+        <Toaster />
       </header>
 
       {isMobileViewport && (
@@ -2821,8 +2846,6 @@ function FocusGalaxyContainer() {
         />
       </AnimatePresence>
 
-      {storageWarning && !isPlanetFocusOpen && !isManageOpen && createPortal(storageWarning, document.body)}
-
 
       {focusPriority && focusSession && createPortal(
         <PlanetFocusMode
@@ -2869,7 +2892,6 @@ export default function App() {
             <Route path="/" component={FocusGalaxyContainer} />
             <Route component={NotFound} />
           </Switch>
-          <Toaster />
         </TooltipProvider>
       </QueryClientProvider>
     </MotionConfig>

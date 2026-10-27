@@ -12,10 +12,11 @@ export function Toaster() {
   const { toasts } = useToast();
 
   return (
-    <ToastProvider>
+    // A replacement notification must not inherit the previous toast's paused timer.
+    <ToastProvider key={toasts[0]?.id}>
       {toasts.map(function ({ id, title, description, action, ...props }) {
         return (
-          <Toast key={id} {...props} className="focus-toast" duration={4600}>
+          <Toast key={id} type={props.variant === 'destructive' ? 'foreground' : 'background'} {...props} className="focus-toast" duration={4600}>
             <div className="grid gap-1">
               {title && <ToastTitle className="focus-toast-title">{title}</ToastTitle>}
               {description && (
@@ -23,7 +24,7 @@ export function Toaster() {
               )}
             </div>
             {action}
-            <ToastClose />
+            <ToastClose aria-label="Dismiss notification" />
           </Toast>
         );
       })}
