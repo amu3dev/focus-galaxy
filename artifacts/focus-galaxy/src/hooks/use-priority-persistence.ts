@@ -36,6 +36,13 @@ export function usePriorityPersistence(
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    try {
+      if (typeof navigator.locks?.request === 'function' && typeof navigator.storage?.persist === 'function') {
+        void navigator.storage.persist().catch(() => {});
+      }
+    } catch {
+      // StorageManager persistence is optional enhancement on mobile browsers.
+    }
     const checkRevision = () => {
       if (revision.current === undefined || conflict.current) return;
       try {

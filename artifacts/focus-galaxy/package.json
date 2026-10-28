@@ -14,7 +14,8 @@
     "test:center-geometry": "QA_SUITE=geometry node scripts/galaxy-ux-regression.mjs",
     "test:notification-obstruction": "QA_SUITE=notifications node scripts/galaxy-ux-regression.mjs",
     "test:mobile-warning": "QA_SUITE=warning node scripts/galaxy-ux-regression.mjs",
-    "test:storage-warning-accessibility": "node scripts/storage-warning-accessibility-regression.mjs"
+    "test:storage-warning-accessibility": "node scripts/storage-warning-accessibility-regression.mjs",
+    "test:mobile-pwa": "node scripts/mobile-pwa-regression.mjs"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",

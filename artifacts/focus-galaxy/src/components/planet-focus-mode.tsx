@@ -163,6 +163,34 @@ export function PlanetFocusMode({
     if (!hasUnsavedContent) setShowExitPrompt(false);
   }, [hasUnsavedContent]);
 
+  useEffect(() => {
+    const vv = window.visualViewport;
+    const dialog = dialogRef.current;
+    if (!vv || !dialog) return;
+
+    const syncVisualViewport = () => {
+      const keyboardInset = Math.max(0, Math.round(window.innerHeight - (vv.height + vv.offsetTop)));
+      dialog.style.setProperty('--keyboard-inset', `${keyboardInset}px`);
+      const active = document.activeElement;
+      if (
+        keyboardInset > 0 &&
+        active instanceof HTMLElement &&
+        dialog.contains(active) &&
+        (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement)
+      ) {
+        active.scrollIntoView({ block: 'nearest' });
+      }
+    };
+
+    syncVisualViewport();
+    vv.addEventListener('resize', syncVisualViewport);
+    vv.addEventListener('scroll', syncVisualViewport);
+    return () => {
+      vv.removeEventListener('resize', syncVisualViewport);
+      vv.removeEventListener('scroll', syncVisualViewport);
+    };
+  }, []);
+
   useLayoutEffect(() => {
     if (showExitPrompt) {
       exitPromptRef.current?.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });

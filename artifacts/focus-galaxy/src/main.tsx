@@ -15,3 +15,16 @@ createRoot(document.getElementById('root')!, {
     <App />
   </ErrorBoundary>,
 );
+
+if (
+  typeof window !== 'undefined' &&
+  (import.meta.env.PROD || (window as Window & { __ENABLE_SW__?: boolean }).__ENABLE_SW__) &&
+  'serviceWorker' in navigator &&
+  window.isSecureContext
+) {
+  window.addEventListener('load', () => {
+    void navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {
+      // Offline shell caching is a progressive enhancement; never block the app.
+    });
+  });
+}

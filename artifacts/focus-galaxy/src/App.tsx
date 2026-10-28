@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { createId } from '@/lib/utils';
 import { PRIORITY_STORAGE_KEY, usePriorityPersistence } from '@/hooks/use-priority-persistence';
 import { Plus, RotateCcw, X, Target, Activity, Orbit, Trash2, ListChecks, Volume2, VolumeX, Music2, CheckCircle2, ChevronDown, ChevronUp, SunMedium, MoreHorizontal } from 'lucide-react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
@@ -67,7 +66,6 @@ const SPOTIFY_VERIFIER_KEY = 'focus-galaxy-spotify-verifier';
 const SPOTIFY_STATE_KEY = 'focus-galaxy-spotify-state';
 const SPOTIFY_SCOPE = 'streaming user-read-playback-state user-modify-playback-state';
 const spotifyClientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID?.trim() ?? '';
-const queryClient = new QueryClient();
 
 type SpotifySession = {
   accessToken: string;
@@ -2887,14 +2885,12 @@ function FocusGalaxyContainer() {
 export default function App() {
   return (
     <MotionConfig reducedMotion="user">
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <Switch>
-            <Route path="/" component={FocusGalaxyContainer} />
-            <Route component={NotFound} />
-          </Switch>
-        </TooltipProvider>
-      </QueryClientProvider>
+      <TooltipProvider>
+        <Switch>
+          <Route path="/" component={FocusGalaxyContainer} />
+          <Route component={NotFound} />
+        </Switch>
+      </TooltipProvider>
     </MotionConfig>
   );
 }
