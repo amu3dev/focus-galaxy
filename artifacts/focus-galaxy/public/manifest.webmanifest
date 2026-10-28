@@ -9,7 +9,11 @@
   "orientation": "any",
   "background_color": "#090a18",
   "theme_color": "#090a18",
-  "categories": ["productivity", "lifestyle", "utilities"],
+  "categories": [
+    "productivity",
+    "lifestyle",
+    "utilities"
+  ],
   "icons": [
     {
       "src": "/favicon.svg",
@@ -37,4 +41,3 @@
     }
   ]
 }
-

@@ -1,3 +1,5 @@
+import crypto from 'crypto';
+import fs from 'fs';
 import path from 'path';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
@@ -21,6 +23,19 @@ export default defineConfig({
     react(),
     tailwindcss(),
     runtimeErrorOverlay(),
+    {
+      name: 'focus-galaxy-sw-build-digest',
+      closeBundle() {
+        const outDir = path.resolve(import.meta.dirname, 'dist/public');
+        const indexPath = path.join(outDir, 'index.html');
+        const swPath = path.join(outDir, 'sw.js');
+        if (fs.existsSync(indexPath) && fs.existsSync(swPath)) {
+          const digest = crypto.createHash('sha256').update(fs.readFileSync(indexPath)).digest('hex').slice(0, 16);
+          const swContent = fs.readFileSync(swPath, 'utf8');
+          fs.writeFileSync(swPath, `// build-digest: ${digest}\n${swContent}`);
+        }
+      },
+    },
     ...(process.env.NODE_ENV !== 'production' &&
     process.env.REPL_ID !== undefined
       ? [

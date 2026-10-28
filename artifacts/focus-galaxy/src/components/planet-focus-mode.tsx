@@ -178,16 +178,30 @@ export function PlanetFocusMode({
         dialog.contains(active) &&
         (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement)
       ) {
-        active.scrollIntoView({ block: 'nearest' });
+        const topbar = dialog.querySelector<HTMLElement>('.planet-focus-topbar');
+        const visibleTop = Math.max(vv.offsetTop, topbar ? topbar.getBoundingClientRect().bottom : 0) + 12;
+        const visibleBottom = vv.offsetTop + vv.height - 12;
+        const container = active.closest('form') ?? active;
+        const containerRect = container.getBoundingClientRect();
+        const activeRect = active.getBoundingClientRect();
+        if (containerRect.bottom > visibleBottom) {
+          const desiredDelta = containerRect.bottom - visibleBottom;
+          const maxSafeDelta = Math.max(0, activeRect.top - visibleTop);
+          dialog.scrollTop += Math.min(desiredDelta, maxSafeDelta > 0 ? maxSafeDelta : desiredDelta);
+        } else if (activeRect.top < visibleTop) {
+          dialog.scrollTop -= visibleTop - activeRect.top;
+        }
       }
     };
 
     syncVisualViewport();
     vv.addEventListener('resize', syncVisualViewport);
     vv.addEventListener('scroll', syncVisualViewport);
+    dialog.addEventListener('focusin', syncVisualViewport);
     return () => {
       vv.removeEventListener('resize', syncVisualViewport);
       vv.removeEventListener('scroll', syncVisualViewport);
+      dialog.removeEventListener('focusin', syncVisualViewport);
     };
   }, []);
 
