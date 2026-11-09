@@ -1543,12 +1543,12 @@ function SelectedPanel({
               onComplete();
             }
           }}
-          aria-label="Complete task"
-          title="Complete task"
+          aria-label="Complete priority"
+          title="Complete priority"
           className="complete-task-corner flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-400/15 px-3 text-[13px] font-bold text-emerald-300 transition-all hover:scale-[1.01] hover:border-emerald-300/80 hover:bg-emerald-400/30 hover:text-emerald-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70"
         >
           <CheckCircle2 size={17} aria-hidden="true" />
-          <span>Complete Task</span>
+          <span>Complete Priority</span>
         </button>
       </div>
           </motion.div>
@@ -2753,7 +2753,7 @@ function FocusGalaxyContainer() {
       <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-background via-background/80 to-transparent pointer-events-none z-10" />
 
       <motion.div
-        className="insight-dock absolute bottom-28 left-6 right-6 flex flex-col xl:flex-row items-end xl:items-end justify-center gap-8 z-20 pointer-events-none"
+        className="insight-dock absolute bottom-14 left-6 right-6 flex flex-col xl:flex-row items-end xl:items-end justify-center gap-8 z-20 pointer-events-none"
         animate={{ y: (panelsOpen && !isZenMode) ? 0 : 320 }}
         transition={prefersReducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 180, damping: 24 }}
       >

@@ -247,7 +247,7 @@ async function main() {
   await test('completion followed immediately by Focus never leaves the galaxy inert', async () => {
     await load(seed);
     await evaluate(`(() => {
-      document.querySelector('[aria-label="Complete task"]').click();
+      document.querySelector('[aria-label="Complete priority"]').click();
       document.querySelector('.selected-panel-focus')?.click();
     })()`);
     await sleep(1500);
@@ -270,7 +270,7 @@ async function main() {
         return original.call(this, name, value);
       };
     })()`);
-    await click('[aria-label="Complete task"]');
+    await click('[aria-label="Complete priority"]');
     await waitFor(`!!document.querySelector('[data-testid="priority-save-warning"]')`);
     assert.equal((await saved())[0].completed, undefined);
     await sleep(800);
@@ -348,7 +348,7 @@ async function main() {
         await click('.mobile-sheet-summary');
         await sleep(700);
       }
-      await click('[aria-label="Complete task"]');
+      await click('[aria-label="Complete priority"]');
       await sleep(1000);
       assert.equal((await saved()).length, 1);
       assert.equal((await saved())[0].completed, true);

@@ -152,7 +152,7 @@ async function main() {
     const a = await tab(ctx, { seedRaw: rawSeed }), b = await tab(ctx);
     assert.equal(await writes(a), 0); assert.equal(await writes(b), 0);
     await focus(a); await note(a, 'Saved in A'); await a.wait(`JSON.parse(localStorage.getItem(${JSON.stringify(key)}))[0].entries.length === 3`);
-    await conflict(b); await press(b, '[aria-label="Complete task"]');
+    await conflict(b); await press(b, '[aria-label="Complete priority"]');
     assert.equal((await stored(a))[0].completed, undefined); assert.equal((await stored(a))[0].entries.at(-1).text, 'Saved in A');
     assert.equal(await writes(b), 0); assert.equal((await exported(b))[0].completed, true);
     assert.deepEqual((await exported(b))[0].entries, seed[0].entries);
@@ -169,7 +169,7 @@ async function main() {
     const a = await tab(ctx, { seedRaw: rawSeed }), b = await tab(ctx, { ignoreEvents: true });
     await focus(a); await note(a, 'Newer saved note'); await a.wait(`JSON.parse(localStorage.getItem(${JSON.stringify(key)}))[0].entries.length === 3`);
     assert.equal(await b.evaluate(`!!document.querySelector('[data-testid="priority-conflict-warning"]')`), false);
-    await press(b, '[aria-label="Complete task"]'); await conflict(b);
+    await press(b, '[aria-label="Complete priority"]'); await conflict(b);
     assert.equal((await stored(a))[0].entries.at(-1).text, 'Newer saved note'); assert.equal((await stored(a))[0].completed, undefined); assert.equal(await writes(b), 0);
   });
   await test('quota retry checks revision and preserves the failed session edit', async (ctx) => {
@@ -216,7 +216,7 @@ async function main() {
   await test('simultaneous writes from the same revision produce one winner and a preserved loser', async (ctx) => {
     const a = await tab(ctx, { seedRaw: rawSeed }), b = await tab(ctx, { ignoreEvents: true }); await focus(a);
     await hold(a);
-    await Promise.all([note(a, 'Overlapping A note'), press(b, '[aria-label="Complete task"]')]);
+    await Promise.all([note(a, 'Overlapping A note'), press(b, '[aria-label="Complete priority"]')]);
     await queued(a, 2); await release(a);
     await a.wait(`navigator.locks.query().then(state=>state.pending.length===0 && state.held.length===0)`);
     await a.wait(`!!document.querySelector('[data-testid="priority-conflict-warning"]') || JSON.parse(localStorage.getItem(${JSON.stringify(key)}))[0].entries.length===3`);
@@ -283,7 +283,7 @@ async function main() {
   });
   await test('external storage clear is a conflict, never an invitation to repopulate stale data', async (ctx) => {
     const a = await tab(ctx, { seedRaw: rawSeed }), b = await tab(ctx); await b.evaluate('localStorage.clear()'); await conflict(a);
-    await press(a, '[aria-label="Complete task"]'); assert.equal(await a.evaluate(`localStorage.getItem(${JSON.stringify(key)})`), null); assert.equal(await writes(a), 0);
+    await press(a, '[aria-label="Complete priority"]'); assert.equal(await a.evaluate(`localStorage.getItem(${JSON.stringify(key)})`), null); assert.equal(await writes(a), 0);
   });
   for (const [width, height] of [[390, 844], [844, 390]]) await test(`conflict warning and reload confirmation remain reachable at ${width}x${height}`, async (ctx) => {
     const a = await tab(ctx, { seedRaw: rawSeed }), b = await tab(ctx, { width, height }); await focus(b); await focus(a); await note(a, 'Mobile conflict note');
