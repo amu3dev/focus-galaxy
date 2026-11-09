@@ -27,6 +27,7 @@ Production: https://focus-galaxy.amu3dev.workers.dev/ (Cloudflare Workers static
   - `test:center-geometry` — verifies `LivingCore` center stability across desktop/mobile viewports and reduced motion.
   - `test:notification-obstruction` — verifies toast placement below the header without obstructing toolbar controls, plus timer lifecycle across repeat resets.
   - `test:mobile-warning` — verifies compact 44px in-flow storage warning strip and zero intersection with the mobile priority sheet.
+  - `test:panel-layout` — verifies slider endpoint alignment, 44×44px touch targets, panel overflow/reachability across 15 viewports, and live `<1280px` ↔ `≥1280px` breakpoint crossing.
   - `test:storage-warning-accessibility` — verifies focus management, Escape handling, and popover details/export across Galaxy, Manage, and Focus Mode views.
   - `test:mobile-pwa` — verifies web app manifest, staged Service Worker shell caching and asset promotion, offline reload, `navigator.storage.persist()`, and visualViewport keyboard inset handling.
 - Optional `QA_OUTPUT_DIR` saves screenshots and JSON results. **Create the directory first**: the storage-content suite does not `mkdir` it and fails with `ENOENT` otherwise.

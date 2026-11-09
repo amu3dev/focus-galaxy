@@ -61,6 +61,7 @@ pnpm --filter @workspace/focus-galaxy run test:planet-cross-tab
 pnpm --filter @workspace/focus-galaxy run test:center-geometry
 pnpm --filter @workspace/focus-galaxy run test:notification-obstruction
 pnpm --filter @workspace/focus-galaxy run test:mobile-warning
+pnpm --filter @workspace/focus-galaxy run test:panel-layout
 pnpm --filter @workspace/focus-galaxy run test:storage-warning-accessibility
 pnpm --filter @workspace/focus-galaxy run test:mobile-pwa
 ```
