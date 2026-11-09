@@ -461,7 +461,7 @@ body {
 
 @media (min-width: 1280px) {
   .panel-slot-signal { height: 268px; }
-  .panel-slot-selected { height: 328px; }
+  .panel-slot-selected { height: auto; }
   .panel-slot-insight { height: 236px; }
   .panel-slot-insight > .panel-card { height: 100%; min-height: 0; }
   .panel-slot-signal .focus-signal-summary { margin-bottom: 12px; }
@@ -894,36 +894,9 @@ input[type=range]::-moz-range-thumb {
   background: transparent;
 }
 
-@media (min-width: 768px) and (max-width: 1279px) {
-  .insight-dock {
-    bottom: 24px;
-    left: 24px;
-    right: 24px;
-    flex-direction: row;
-    gap: 16px;
-  }
-  .insight-dock .panel-slot {
-    flex: 1 1 0;
-    width: 0;
-    min-width: 0;
-    height: 240px;
-  }
-  .insight-dock .panel-slot-insight > .panel-card {
-    height: 100%;
-    min-height: 0;
-  }
-  .insight-dock .panel-slot-selected {
-    height: 320px;
-  }
-  .focus-signal-list {
-    max-height: clamp(80px, 15dvh, 108px);
-  }
-  .insight-dock .selected-panel-card {
-    overflow-y: auto;
-  }
-}
-
-@media (max-width: 767px), (max-width: 1024px) and (max-height: 560px) {
+@media (max-width: 1279px) {
+  .focus-galaxy-app.mobile-ui-viewport { perspective: none; }
+  .galaxy-shortcuts { display: none; }
   .app-header {
     z-index: 40;
     padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px 0;
@@ -1094,8 +1067,8 @@ input[type=range]::-moz-range-thumb {
   .mobile-sheet-handle {
     display: flex;
     width: 100%;
-    height: 28px;
-    flex: 0 0 28px;
+    height: 44px;
+    flex: 0 0 44px;
     align-items: center;
     justify-content: center;
     margin: 0;
@@ -1172,14 +1145,12 @@ input[type=range]::-moz-range-thumb {
     -webkit-overflow-scrolling: touch;
   }
   .selected-panel-presets { gap: 6px; margin-bottom: 8px; }
-  .selected-panel-presets > button { min-height: 32px; padding: 0 9px; font-size: 11px; }
+  .selected-panel-presets > button { min-height: 44px; padding: 0 9px; font-size: 11px; }
   .selected-panel-metrics { gap: 6px; }
   .selected-panel-metrics .group > div:first-child { margin-bottom: 2px; }
-  .selected-panel-metrics .group > .relative { height: 38px; }
+  .selected-panel-metrics .group > .relative { height: 44px; }
   .selected-panel-metrics .group > .relative input[type="range"] { height: 44px; touch-action: pan-x; }
   .selected-panel-actions {
-    position: sticky;
-    bottom: 0;
     gap: 8px;
     margin: 6px 0 0;
     padding: 8px 0 2px;
@@ -1253,6 +1224,7 @@ input[type=range]::-moz-range-thumb {
   .header-brand a > span { font-size: 12px; letter-spacing: 0.1em; }
   .header-add { width: 44px; padding-inline: 0; }
   .header-add-label { display: none; }
+  .selected-panel-presets-label { display: none; }
   .selected-panel-card.mobile-priority-sheet { padding-inline: 12px; }
   .mobile-sheet-name { max-width: 52vw; }
   .selected-panel-actions { gap: 6px; }
@@ -1269,7 +1241,7 @@ input[type=range]::-moz-range-thumb {
   }
 }
 
-@media (max-width: 767px), (max-width: 1024px) and (max-height: 560px) {
+@media (max-width: 1279px) {
   .focus-toast-viewport {
     top: calc(100% + 8px);
     right: auto;
@@ -2061,7 +2033,7 @@ input[type=range]::-moz-range-thumb {
   color: #ffb9c7;
 }
 
-@media (max-width: 767px), (max-width: 1024px) and (max-height: 560px) {
+@media (max-width: 1279px) {
   .selected-panel-header-actions { gap: 6px; }
   .selected-panel-focus {
     width: 44px;
@@ -2072,6 +2044,9 @@ input[type=range]::-moz-range-thumb {
   }
   .selected-panel-focus span { display: none; }
   .selected-panel-close { flex: 0 0 44px; }
+}
+
+@media (max-width: 767px), (max-width: 1024px) and (max-height: 560px) {
   .planet-focus-overlay {
     padding: calc(env(safe-area-inset-top, 0px) + 10px) 18px calc(env(safe-area-inset-bottom, 0px) + 18px + var(--keyboard-inset, 0px));
     background:
@@ -2181,7 +2156,7 @@ input[type=range]::-moz-range-thumb {
   .planet-content-edit textarea { min-height: 78px; }
 }
 
-@media (max-width: 767px), (max-width: 1024px) and (max-height: 560px) {
+@media (max-width: 1279px) {
   .mobile-insights-trigger-slot {
     position: fixed;
     z-index: 35;
@@ -2218,10 +2193,6 @@ input[type=range]::-moz-range-thumb {
   .mobile-insights-trigger:active { transform: scale(0.97); }
   .mobile-insights-trigger:focus-visible { outline: 2px solid rgba(225,201,255,0.92); outline-offset: 3px; }
 
-  @media (max-width: 1024px) and (max-height: 560px) and (orientation: landscape) {
-    /* Keep viewport-fixed mobile layers out of the galaxy's 3D perspective plane. */
-    .focus-galaxy-app.mobile-ui-viewport { perspective: none; }
-  }
 
   .mobile-insights-overlay {
     background: rgba(2, 2, 10, 0.28) !important;

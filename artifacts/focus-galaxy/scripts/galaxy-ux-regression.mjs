@@ -25,7 +25,7 @@ async function page(width, height, { reduced = false, noLocks = false } = {}) {
   const c = await CDP.connect(targets.find(t => t.id === targetId).webSocketDebuggerUrl);
   c.context = browserContextId;
   await c.send('Runtime.enable'); await c.send('Page.enable'); await c.send('Page.bringToFront');
-  c.touch = width <= 767 || (width <= 1024 && height <= 560);
+  c.touch = width < 1280;
   await viewport(c, width,height,c.touch);
   await c.send('Emulation.setEmulatedMedia', { features:[{name:'prefers-reduced-motion',value:reduced?'reduce':'no-preference'}] });
   if (noLocks) await c.send('Page.addScriptToEvaluateOnNewDocument', { source:`
@@ -239,6 +239,72 @@ async function warning(c,touch) {
   await click(c,'[aria-label="Close dialog"]',true); await c.wait(`!document.querySelector('.manage-dialog')`);
   return {warningHeight:measure.rect.height,overlap:measure.overlap,exports:names,persistenceWrites:0};
 }
+async function panels(c,touch) {
+  assert.equal(await c.evaluate(`document.querySelector('.focus-galaxy-app').classList.contains('mobile-ui-viewport')`),touch,'Use compact controls below 1280px instead of squeezing three cards');
+  await c.evaluate(`document.querySelector('[data-testid="orb-family"]').click()`);
+  await c.wait(`document.querySelector('#selected-priority-name')?.value==='Family' || document.querySelector('.mobile-sheet-name')?.textContent==='Family'`);
+  await settledPanel(c,'.selected-panel-card');
+  if(touch) {
+    await click(c,'.mobile-sheet-handle',true);
+    await c.wait(`document.querySelector('.mobile-sheet-handle')?.getAttribute('aria-expanded')==='true'`);
+    await settledPanel(c,'.selected-panel-details');
+  }
+  for(let i=1;i<=3;i++) for(const [command,code,want] of [['End',35,'10'],['Home',36,'1']]) {
+    const input=`.selected-panel-metrics .group:nth-child(${i}) input`;
+    const thumb=`.selected-panel-metrics .group:nth-child(${i}) .pointer-events-none`;
+    await c.evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(input)}),d=document.querySelector('.selected-panel-details');d.scrollTop+=e.getBoundingClientRect().y-d.getBoundingClientRect().y-d.clientHeight/2;e.focus({preventScroll:true});})()`);
+    await key(c,command,command,code);
+    await c.wait(`document.querySelector(${JSON.stringify(input)}).value===${JSON.stringify(want)}`);
+    await settledPanel(c,thumb);
+    const endpoint=await c.evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(input)}),t=document.querySelector(${JSON.stringify(thumb)}),r=e.getBoundingClientRect(),b=t.getBoundingClientRect();return {value:e.value,input:r.toJSON(),thumb:b.toJSON(),center:b.x+b.width/2};})()`);
+    // A native 20px range thumb travels between centers 10px inside each end.
+    const expected=want==='10'?endpoint.input.right-10:endpoint.input.left+10;
+    assert.ok(Math.abs(endpoint.center-expected)<=2,`Slider visual must match its native endpoint without clipping: ${JSON.stringify(endpoint)}`);
+  }
+  await c.evaluate(`document.querySelector('.selected-panel-details').scrollTop=99999`);
+  const measure = await c.evaluate(`(()=>{
+    const details=document.querySelector('.selected-panel-details');
+    const controls=[...document.querySelectorAll('.mobile-sheet-handle,.selected-panel-presets > button')].filter(e=>e.getClientRects().length).map(e=>{
+      const r=e.getBoundingClientRect();return {label:e.getAttribute('aria-label')||e.innerText,width:r.width,height:r.height};
+    });
+    const actions=[...document.querySelectorAll('.selected-panel-actions > button[type="submit"],.complete-task-corner')].map(e=>{
+      const r=e.getBoundingClientRect();return {label:e.innerText,hits:[.1,.5,.9].map(f=>{
+        const h=document.elementFromPoint(r.x+r.width/2,r.y+r.height*f);return h===e||e.contains(h);
+      })};
+    });
+    return {width:innerWidth,height:innerHeight,scrollWidth:document.documentElement.scrollWidth,controls,actions,nameWidth:document.querySelector('#selected-priority-name').getBoundingClientRect().width,details:{client:details.clientHeight,scroll:details.scrollHeight}};
+  })()`);
+  await screenshot(c,output,`panels-${measure.width}x${measure.height}`);
+  if(touch) {
+    assert.equal(measure.controls.length,5,'Handle and all four presets are visible');
+    assert.ok(measure.controls.every(e=>e.width>=44 && e.height>=44),`44px touch targets: ${JSON.stringify(measure.controls)}`);
+    if(measure.height>=568) assert.ok(measure.details.scroll<=measure.details.client+1,'Tall viewport details fit without overflow');
+  }
+  assert.ok(measure.nameWidth>=100,'Priority name must not be squeezed by its header actions');
+  assert.equal(measure.actions.length,2,'Both save and completion actions exist');
+  assert.ok(measure.actions.every(e=>e.hits.every(Boolean)),`Action buttons must be reachable at their top, center, and bottom: ${JSON.stringify(measure.actions)}`);
+  if(touch) {
+    await click(c,'.mobile-sheet-handle',true);
+    await click(c,'.mobile-insights-trigger',true);
+    await c.wait(`!!document.querySelector('.mobile-insights-sheet')`);
+    await settledPanel(c,'.mobile-insights-sheet');
+    await click(c,'.mobile-insights-tab:last-child',true);
+    await c.wait(`!!document.querySelector('.mobile-context-insight')`);
+    await settledPanel(c,'.mobile-insights-sheet');
+    const context=await c.evaluate(`(()=>{const p=document.querySelector('.mobile-insights-panel[data-state="active"]'),r=p.getBoundingClientRect();return {title:p.querySelector('h3').innerText,text:p.querySelector('p').innerText,visible:[...p.querySelectorAll('h3,p')].every(e=>{const b=e.getBoundingClientRect();return b.top>=r.top && b.bottom<=r.bottom && b.left>=r.left && b.right<=r.right;})};})()`);
+    assert.ok(context.title && context.text && context.visible,`Current insight must fit its scrolling pane: ${JSON.stringify(context)}`);
+    await click(c,'.mobile-insights-tab:first-child',true);
+    await c.wait(`!!document.querySelector('.mobile-focus-signal-row')`);
+    await settledPanel(c,'.mobile-insights-sheet');
+    await c.evaluate(`const p=document.querySelector('.mobile-insights-panel[data-state="active"]');p.scrollTop=p.scrollHeight`);
+    await target(c,'.mobile-focus-signal-row:last-child');
+    await click(c,'.mobile-insights-sheet > button',true);
+    await c.wait(`!document.querySelector('.mobile-insights-sheet')`);
+    measure.insight=context;
+  }
+  assert.equal(measure.scrollWidth,measure.width,'No horizontal document overflow');
+  return measure;
+}
 async function main() {
   if(output) await mkdir(output,{recursive:true});
   const version = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json();
@@ -253,6 +319,32 @@ async function main() {
   } else if(suite==='warning') {
     for(const [w,h] of sizes.slice(1)) await test(`${w}x${h}`,w,h,{noLocks:true},warning);
     assert.equal(results.length,4,'Every warning case ran');
+  } else if(suite==='panels') {
+    const panelSizes=[...sizes,[1280,800],[1920,1080],[609,741],[842,741],[960,1440],[412,924],[767,741],[768,741],[1279,741],[320,568]];
+    // Layout assertions use reduced motion; the geometry suite exercises animation.
+    for(const [w,h] of panelSizes) await test(`${w}x${h}`,w,h,{reduced:true},panels);
+    await test('open-insights-crosses-desktop-breakpoint',842,741,{reduced:true},async c=>{
+      const saved=await c.evaluate(`localStorage.getItem('focus-galaxy-priorities-v2')`);
+      await click(c,'.mobile-insights-trigger',true);
+      await c.wait(`!!document.querySelector('.mobile-insights-sheet')`);
+      await viewport(c,1280,800,false);
+      await c.wait(`!document.querySelector('.mobile-ui-viewport') && !document.querySelector('.mobile-insights-sheet') && getComputedStyle(document.body).pointerEvents!=='none'`);
+      await target(c,'[aria-label="Complete priority"]');
+      await viewport(c,842,741,true);
+      await c.wait(`!!document.querySelector('.mobile-sheet-summary')`);
+      await target(c,'.mobile-sheet-summary');
+      await click(c,'.mobile-sheet-handle',true);
+      await settledPanel(c,'.selected-panel-details');
+      for(const [letter,code] of [['f',70],['z',90]]) {
+        await key(c,letter,`Key${letter.toUpperCase()}`,code);
+        await c.wait(`document.querySelector('.insight-dock').getBoundingClientRect().top>=innerHeight`);
+        await key(c,letter,`Key${letter.toUpperCase()}`,code);
+        await c.wait(`document.querySelector('.insight-dock').getBoundingClientRect().bottom<=innerHeight+1`);
+      }
+      assert.equal(await c.evaluate(`localStorage.getItem('focus-galaxy-priorities-v2')`),saved,'Resizing must not change priorities');
+      return {restoredCompactControls:true,preservedPriorities:true};
+    });
+    assert.equal(results.length,panelSizes.length+1,'Every panel case ran');
   } else throw new Error(`Unknown suite: ${suite}`);
   const summary={suite,passed:results.filter(r=>r.status==='PASS').length,failed:results.filter(r=>r.status!=='PASS').length,results};
   if(output) await writeFile(path.join(output,`${suite}.json`),JSON.stringify({...summary,evidence},null,2));

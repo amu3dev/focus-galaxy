@@ -60,7 +60,7 @@ type Confirmation = {
 };
 
 const STORAGE_KEY = PRIORITY_STORAGE_KEY;
-const MOBILE_VIEWPORT_QUERY = '(max-width: 767px), (max-width: 1024px) and (max-height: 560px)';
+const MOBILE_VIEWPORT_QUERY = '(max-width: 1279px)';
 const SPOTIFY_SESSION_KEY = 'focus-galaxy-spotify-session';
 const SPOTIFY_VERIFIER_KEY = 'focus-galaxy-spotify-verifier';
 const SPOTIFY_STATE_KEY = 'focus-galaxy-spotify-state';
@@ -892,6 +892,7 @@ function RangeControl({
   color: string;
   onChange: (value: number) => void;
 }) {
+  const progress = ((value - 1) / 9) * 100;
   return (
     <div className="group">
       <div className="flex justify-between text-[11px] mb-2">
@@ -899,12 +900,14 @@ function RangeControl({
         <span className="font-sans font-bold text-white text-[13px]">{value}</span>
       </div>
       <div className="relative h-7 w-full flex items-center">
-        <div className="range-track absolute left-0 right-0 h-[6px] rounded-full">
-          <motion.div
+        <div className="range-track absolute left-[10px] right-[10px] h-[6px] rounded-full">
+          <div
              className="absolute left-0 h-full rounded-full"
-             style={{ backgroundColor: color, boxShadow: `0 0 10px ${color}` }}
-             animate={{ width: `${(value/10)*100}%` }}
-             transition={{ type: 'spring', damping: 20, stiffness: 200 }}
+             style={{ backgroundColor: color, boxShadow: `0 0 10px ${color}`, width: `${progress}%` }}
+          />
+          <div
+            className="absolute top-1/2 w-4 h-4 rounded-full bg-white shadow-[0_0_10px_var(--c)] pointer-events-none -translate-x-1/2 -translate-y-1/2"
+            style={{ '--c': color, left: `${progress}%` } as CSSProperties}
           />
         </div>
         <input 
@@ -912,12 +915,6 @@ function RangeControl({
           aria-label={label}
           onChange={(e) => onChange(Number(e.target.value))}
           className="metric-range absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-        />
-        <motion.div 
-          className="absolute top-1/2 w-4 h-4 rounded-full bg-white shadow-[0_0_10px_var(--c)] pointer-events-none -translate-y-1/2"
-          style={{ '--c': color } as any}
-          animate={{ left: `calc(${(value/10)*100}% - 8px)` }}
-          transition={{ type: 'spring', damping: 20, stiffness: 200 }}
         />
       </div>
     </div>
@@ -1288,11 +1285,11 @@ function InsightPanel({ insight, title, priority, presentation = 'desktop' }: { 
         borderColor: `${color}40`,
       } as any}
     >
-      {priority && (
+      {priority && !isMobilePresentation && (
          <div className="absolute inset-0 opacity-20 pointer-events-none transition-colors duration-700" style={{ background: `radial-gradient(circle at 50% -20%, ${priority.hue}, transparent 70%)` }} />
       )}
       
-      <div className="w-12 h-12 rounded-full border border-white/20 bg-white/5 flex items-center justify-center mb-4 z-10 transition-colors duration-500" style={{ boxShadow: priority ? `0 0 25px ${priority.hue}60` : 'none' }}>
+      <div className="w-12 h-12 rounded-full border border-white/20 bg-white/5 flex items-center justify-center mb-4 z-10 transition-colors duration-500" style={{ boxShadow: priority && !isMobilePresentation ? `0 0 25px ${priority.hue}60` : 'none' }}>
         <Activity size={20} className={priority ? "text-white" : "text-white/60"} style={{ color: priority?.hue }} />
       </div>
       
@@ -2754,7 +2751,7 @@ function FocusGalaxyContainer() {
 
       <motion.div
         className="insight-dock absolute bottom-14 left-6 right-6 flex flex-col xl:flex-row items-end xl:items-end justify-center gap-8 z-20 pointer-events-none"
-        animate={{ y: (panelsOpen && !isZenMode) ? 0 : 320 }}
+        animate={{ y: (panelsOpen && !isZenMode) ? 0 : 'calc(100% + 56px)' }}
         transition={prefersReducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 180, damping: 24 }}
       >
         <button
@@ -2870,7 +2867,7 @@ function FocusGalaxyContainer() {
       )}
 
       {/* Keyboard Shortcuts and Galaxy Explore Pill */}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 pointer-events-auto hidden md:flex items-center gap-3 opacity-60 hover:opacity-100 transition-opacity bg-black/50 px-4 py-1.5 rounded-full border border-white/10 backdrop-blur-md text-[11px] text-white/70">
+      <div className="galaxy-shortcuts fixed bottom-4 left-1/2 -translate-x-1/2 z-30 pointer-events-auto hidden md:flex items-center gap-3 opacity-60 hover:opacity-100 transition-opacity bg-black/50 px-4 py-1.5 rounded-full border border-white/10 backdrop-blur-md text-[11px] text-white/70">
         <span className="font-semibold text-white/90">Shortcuts:</span>
         <span><kbd className="px-1.5 py-0.5 rounded bg-white/10 border border-white/15 text-[10px] text-white">[</kbd> / <kbd className="px-1.5 py-0.5 rounded bg-white/10 border border-white/15 text-[10px] text-white">]</kbd> Cycle</span>
         <span className="text-white/20">•</span>

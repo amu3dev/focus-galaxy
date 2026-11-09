@@ -1,0 +1,26 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "artifacts/focus-galaxy/src/index.css"
+        ],
+        "createdAt": "2026-11-09T09:41:58.185Z",
+        "reason": "Agent: existing planet-content border encodes the selected planet hue and becomes neutral for completed entries; preserve this functional state cue during the scoped layout fix"
+      },
+      {
+        "rule": "overused-font",
+        "value": "plus jakarta sans",
+        "files": [
+          "artifacts/focus-galaxy/src/index.css"
+        ],
+        "createdAt": "2026-11-09T09:41:58.215Z",
+        "reason": "Agent: existing --font-sans token is the incumbent product body font; preserve typography for the scoped clipping and touch-target fix"
+      }
+    ]
+  }
+}

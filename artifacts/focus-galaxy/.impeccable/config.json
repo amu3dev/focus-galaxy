@@ -1,0 +1,26 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "src/index.css"
+        ],
+        "createdAt": "2026-11-09T10:36:11.258Z",
+        "reason": "Agent: existing planet-content border encodes planet identity and completed state; preserve the incumbent visual system in the responsive fix"
+      },
+      {
+        "rule": "overused-font",
+        "value": "plus jakarta sans",
+        "files": [
+          "src/index.css"
+        ],
+        "createdAt": "2026-11-09T10:36:11.287Z",
+        "reason": "Agent: existing --font-sans product body font is unchanged; typography replacement is outside the responsive fix"
+      }
+    ]
+  }
+}
