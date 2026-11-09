@@ -15,14 +15,20 @@ Production: https://focus-galaxy.amu3dev.workers.dev/ (Cloudflare Workers static
 
 ## Regression tests
 
-Browser suites in `artifacts/focus-galaxy/scripts/` drive Chrome over CDP. They never launch a browser themselves.
+`test:id` runs directly in Node (`pnpm --filter @workspace/focus-galaxy run test:id`). Browser suites in `artifacts/focus-galaxy/scripts/` drive Chrome over CDP using `scripts/cdp-harness.mjs` and never launch a browser themselves.
 
 - Requirements: the dev server on `http://127.0.0.1:5173/` (`APP_URL`) and an **isolated** Chrome with `--remote-debugging-port=9228` (`CDP_PORT`) and a throwaway `--user-data-dir`. Headless (`--headless=new`) works.
-- `test:planet-interaction` and `test:planet-storage-content` attach to an existing page on the app origin. Open one first (e.g. `curl -X PUT "http://127.0.0.1:9228/json/new?http://127.0.0.1:5173/"`). `test:planet-cross-tab` creates its own disposable browser contexts.
+- `test:planet-interaction` and `test:planet-storage-content` attach to an existing page on the app origin. Open one first (e.g. `curl -X PUT "http://127.0.0.1:9228/json/new?http://127.0.0.1:5173/"`). The remaining browser suites create their own disposable browser contexts.
 - Run them one at a time with `pnpm --filter @workspace/focus-galaxy run <suite>`. They share a browser and contain timing-sensitive checks.
+  - `test:id` — Node unit test for `createId()` with and without `crypto.randomUUID`.
   - `test:planet-interaction` — real hit-testing of planets across panels, audio, viewports, and ~130 s of orbiting (`ORBIT_WAIT_MS`). About 3.5 min.
   - `test:planet-storage-content` — validation and recovery, quota failure and retry, completion and restoration, deletion confirmations, mobile viewports.
   - `test:planet-cross-tab` — revision-checked multi-tab saves, Web Locks queuing, fail-closed paths, conflict UI at 390×844 and 844×390.
+  - `test:center-geometry` — verifies `LivingCore` center stability across desktop/mobile viewports and reduced motion.
+  - `test:notification-obstruction` — verifies toast placement below the header without obstructing toolbar controls, plus timer lifecycle across repeat resets.
+  - `test:mobile-warning` — verifies compact 44px in-flow storage warning strip and zero intersection with the mobile priority sheet.
+  - `test:storage-warning-accessibility` — verifies focus management, Escape handling, and popover details/export across Galaxy, Manage, and Focus Mode views.
+  - `test:mobile-pwa` — verifies web app manifest, staged Service Worker shell caching and asset promotion, offline reload, `navigator.storage.persist()`, and visualViewport keyboard inset handling.
 - Optional `QA_OUTPUT_DIR` saves screenshots and JSON results. **Create the directory first**: the storage-content suite does not `mkdir` it and fails with `ENOENT` otherwise.
 - The suites only touch storage inside the isolated profile. Never point them at a personal Chrome profile.
 
@@ -34,14 +40,16 @@ Browser suites in `artifacts/focus-galaxy/scripts/` drive Chrome over CDP. They 
 
 ## Where things live
 
-- `artifacts/focus-galaxy/src/App.tsx` — priority model, scoring, galaxy rendering and hit layer, panels, Manage dialog, keyboard shortcuts, storage hydration and validation, persistence banners.
-- `artifacts/focus-galaxy/src/hooks/use-priority-persistence.ts` — revision-checked, Web Locks–coordinated localStorage writes.
-- `artifacts/focus-galaxy/src/components/planet-focus-mode.tsx` — full-screen Focus Mode for one planet.
+- `artifacts/focus-galaxy/src/App.tsx` — priority model, scoring, galaxy rendering and hit layer, panels, Manage dialog, keyboard shortcuts, storage hydration and validation, compact persistence warning strip and popover.
+- `artifacts/focus-galaxy/src/hooks/use-priority-persistence.ts` — revision-checked, Web Locks–coordinated localStorage writes and `navigator.storage.persist()` durability request.
+- `artifacts/focus-galaxy/src/components/planet-focus-mode.tsx` — full-screen Focus Mode for one planet, including `visualViewport` keyboard inset tracking.
 - `artifacts/focus-galaxy/src/components/planet-content-composer.tsx` — notes and tasks: compose, edit, complete, delete with confirmation.
+- `artifacts/focus-galaxy/src/lib/utils.ts` — `cn()` and `createId()` (UUID v4 with `crypto.getRandomValues` fallback for HTTP LAN origins).
+- `artifacts/focus-galaxy/public/sw.js` & `manifest.webmanifest` — installable PWA manifest and Service Worker with staged shell & asset validation.
 - `artifacts/focus-galaxy/src/index.css` — visual system, responsive layout, motion.
-- `artifacts/focus-galaxy/scripts/*.mjs` — CDP regression suites.
+- `artifacts/focus-galaxy/scripts/*.mjs` — CDP and Node regression suites.
 - `wrangler.jsonc` (repo root) — Worker `focus-galaxy`, static assets from `artifacts/focus-galaxy/dist/public`, SPA fallback.
-- `docs/` — product positioning, articles, asset inventory, screenshots.
+- `docs/` — product positioning, articles, asset inventory, verification reports, screenshots.
 
 ## Product
 
@@ -70,7 +78,7 @@ Browser suites in `artifacts/focus-galaxy/scripts/` drive Chrome over CDP. They 
 - **Web Locks need a secure context.** `127.0.0.1`, `localhost`, and HTTPS (production) work. Opening the dev server over a LAN IP (`http://192.168.x.x:5173`, e.g. from a phone) disables saving and shows "Saving is unavailable in this browser". Verified on 2026-10-26. Test physical devices against HTTPS, such as production, a Workers preview, or an HTTPS tunnel.
 - Browser support follows Web Locks: Chrome/Edge 69+, Firefox 96+, Safari/iOS 15.4+. Older browsers can use the app, but changes are memory-only with a download option.
 - The vite build prints sourcemap warnings ("Can't resolve original location of error") for `components/ui/{tooltip,sheet,dropdown-menu}.tsx`. They come from the shadcn `'use client'` directives that Rollup strips. They don't affect the build.
-- The JS bundle is about 597 kB minified (about 188 kB gzip), which trips Vite's 500 kB warning. React DOM and Framer Motion make up most of it. See "Known technical debt" below.
+- The JS build is split via `manualChunks` into `index` (~257 kB / ~79 kB gzip), `react-vendor` (~186 kB / ~59 kB gzip), and `motion` (~130 kB / ~43 kB gzip), and `vite.config.ts` prepends a SHA-256 `// build-digest: <hash>` header to `dist/public/sw.js`.
 - `pnpm-workspace.yaml` overrides strip most non-linux-x64 native binaries (macOS binaries are kept, so local dev on a Mac works). Don't remove `minimumReleaseAge`.
 - Deploying uploads whatever is in `dist/public`. The deploy script rebuilds first, so always deploy from a clean, verified commit.
 

@@ -54,17 +54,25 @@ Browser regression checks require a running app and an isolated Chrome profile
 with remote debugging enabled. Open the app in that profile, then run:
 
 ```bash
+pnpm --filter @workspace/focus-galaxy run test:id
 pnpm --filter @workspace/focus-galaxy run test:planet-storage-content
 pnpm --filter @workspace/focus-galaxy run test:planet-interaction
 pnpm --filter @workspace/focus-galaxy run test:planet-cross-tab
+pnpm --filter @workspace/focus-galaxy run test:center-geometry
+pnpm --filter @workspace/focus-galaxy run test:notification-obstruction
+pnpm --filter @workspace/focus-galaxy run test:mobile-warning
+pnpm --filter @workspace/focus-galaxy run test:storage-warning-accessibility
+pnpm --filter @workspace/focus-galaxy run test:mobile-pwa
 ```
 
-All three commands default to `APP_URL=http://127.0.0.1:5173/` and `CDP_PORT=9228`;
+`test:id` runs in Node without a browser. The browser commands default to `APP_URL=http://127.0.0.1:5173/` and `CDP_PORT=9228`;
 set these variables to match your setup. Run the suites serially when sharing a
 CDP browser. The storage/content and interaction checks replace app data in the test
-profile; the cross-tab suite creates disposable browser contexts and downloads test
+profile; the cross-tab, UX, accessibility, and PWA suites create disposable browser contexts and download test
 session copies into `QA_OUTPUT_DIR` (or a temporary directory). The interaction
 suite includes a 130-second orbital observation.
+
+Focus Galaxy is also an installable Progressive Web App (`manifest.webmanifest`, icons, and `/sw.js`). In secure contexts, the Service Worker stages and validates the application shell and hashed asset bundles before promoting them to the active cache (`focus-galaxy-shell-v1`), pruning stale build assets so repeat and offline launches stay coherent.
 
 When invalid saved priorities or entries are rejected, their original stored text
 is retained in localStorage under `focus-galaxy-priorities-v2.corrupt`. Later
