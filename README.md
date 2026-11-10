@@ -8,7 +8,7 @@ Focus Galaxy is a local-first focus and priority map that turns tasks into an in
 
 *Captured from the running app with its six seeded sample priorities.*
 
-![Focus Galaxy running in a phone-sized browser, captured at 390×844](docs/assets/focus-galaxy-mobile.jpg)
+![Focus Galaxy running in a phone-sized browser, captured at 390×844](docs/assets/focus-galaxy-mobile.jpg) test test
 
 *The same live app and sample priorities at a phone-sized viewport.*
 
