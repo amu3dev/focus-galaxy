@@ -30,6 +30,7 @@ Production: https://focus-galaxy.amu3dev.workers.dev/ (Cloudflare Workers static
   - `test:panel-layout` — verifies slider endpoint alignment, 44×44px touch targets, panel overflow/reachability across 15 viewports, and live `<1280px` ↔ `≥1280px` breakpoint crossing.
   - `test:storage-warning-accessibility` — verifies focus management, Escape handling, and popover details/export across Galaxy, Manage, and Focus Mode views.
   - `test:mobile-pwa` — verifies web app manifest, staged Service Worker shell caching and asset promotion, offline reload, `navigator.storage.persist()`, and visualViewport keyboard inset handling.
+  - `test:planet-orbital` — verifies Level 2 task moons and note fragments in Focus Mode: real persisted records, Level 1 planet count preservation across round trips, preview task completion and existing-composer edit handoff, orbital motion and pause triggers, touch/320px layout, and reduced-motion group browsing.
 - Optional `QA_OUTPUT_DIR` saves screenshots and JSON results. **Create the directory first**: the storage-content suite does not `mkdir` it and fails with `ENOENT` otherwise.
 - The suites only touch storage inside the isolated profile. Never point them at a personal Chrome profile.
 
@@ -44,6 +45,7 @@ Production: https://focus-galaxy.amu3dev.workers.dev/ (Cloudflare Workers static
 - `artifacts/focus-galaxy/src/App.tsx` — priority model, scoring, galaxy rendering and hit layer, panels, Manage dialog, keyboard shortcuts, storage hydration and validation, compact persistence warning strip and popover.
 - `artifacts/focus-galaxy/src/hooks/use-priority-persistence.ts` — revision-checked, Web Locks–coordinated localStorage writes and `navigator.storage.persist()` durability request.
 - `artifacts/focus-galaxy/src/components/planet-focus-mode.tsx` — full-screen Focus Mode for one planet, including `visualViewport` keyboard inset tracking.
+- `artifacts/focus-galaxy/src/components/planet-orbital-system.tsx` — Level 2 orbital moons and note fragments around the focused planet, preview card, pause/group controls, and composer handoff.
 - `artifacts/focus-galaxy/src/components/planet-content-composer.tsx` — notes and tasks: compose, edit, complete, delete with confirmation.
 - `artifacts/focus-galaxy/src/lib/utils.ts` — `cn()` and `createId()` (UUID v4 with `crypto.getRandomValues` fallback for HTTP LAN origins).
 - `artifacts/focus-galaxy/public/sw.js` & `manifest.webmanifest` — installable PWA manifest and Service Worker with staged shell & asset validation.
