@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import { ArrowLeft } from 'lucide-react';
 import { motion, useAnimationControls } from 'framer-motion';
 import { PlanetContentComposer, type PlanetEntry, type PlanetEntryType } from '@/components/planet-content-composer';
+import { PlanetOrbitalSystem } from '@/components/planet-orbital-system';
 
 export type PlanetFocusPriority = {
   id: string;
@@ -62,6 +63,7 @@ export function PlanetFocusMode({
   const returnFlight = useRef({ x: 0, y: 0, scale: 1 });
   const closing = useRef(false);
   const [hasUnsavedContent, setHasUnsavedContent] = useState(false);
+  const [revealEntry, setRevealEntry] = useState<{ id: string } | null>(null);
   const [showExitPrompt, setShowExitPrompt] = useState(false);
   const hasUnsavedContentRef = useRef(false);
   const showExitPromptRef = useRef(false);
@@ -290,7 +292,8 @@ export function PlanetFocusMode({
       <div className="planet-focus-layout">
         <section className="planet-focus-hero" aria-label={`${priority.name} planet`}>
           <div className="planet-focus-starfield" aria-hidden="true" />
-          <div className="planet-focus-orbit-glow" aria-hidden="true" />
+          <PlanetOrbitalSystem entries={priority.entries ?? []} prefersReducedMotion={prefersReducedMotion}
+            onToggleTask={onToggleTask} onRevealEntry={id => setRevealEntry({ id })}>
           <div className="planet-focus-orb-target" ref={heroRef}>
             <motion.div className="planet-focus-orb-flight" animate={planetAnimation}>
               <div className="planet-focus-orb-art selected" style={{ '--orb-color': priority.hue } as CSSProperties}>
@@ -301,7 +304,7 @@ export function PlanetFocusMode({
               </div>
             </motion.div>
           </div>
-          <span className="planet-focus-orbit-caption"><i aria-hidden="true" /> IN YOUR ORBIT</span>
+          </PlanetOrbitalSystem>
         </section>
 
         <div className="planet-focus-content">
@@ -340,6 +343,7 @@ export function PlanetFocusMode({
             onToggleTask={onToggleTask}
             onDeleteEntry={onDeleteEntry}
             onDraftStateChange={setHasUnsavedContent}
+            revealEntry={revealEntry}
           />
         </div>
       </div>

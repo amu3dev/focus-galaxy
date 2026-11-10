@@ -57,6 +57,7 @@ with remote debugging enabled. Open the app in that profile, then run:
 pnpm --filter @workspace/focus-galaxy run test:id
 pnpm --filter @workspace/focus-galaxy run test:planet-storage-content
 pnpm --filter @workspace/focus-galaxy run test:planet-interaction
+pnpm --filter @workspace/focus-galaxy run test:planet-orbital
 pnpm --filter @workspace/focus-galaxy run test:planet-cross-tab
 pnpm --filter @workspace/focus-galaxy run test:center-geometry
 pnpm --filter @workspace/focus-galaxy run test:notification-obstruction
@@ -72,6 +73,10 @@ CDP browser. The storage/content and interaction checks replace app data in the 
 profile; the cross-tab, UX, accessibility, and PWA suites create disposable browser contexts and download test
 session copies into `QA_OUTPUT_DIR` (or a temporary directory). The interaction
 suite includes a 130-second orbital observation.
+
+`test:planet-orbital` covers Level 2 task moons and note fragments, real mouse/touch
+selection, completion and editing persistence, motion/pause and reduced motion,
+grouped browsing, and clean Level 1 restoration. It uses disposable contexts.
 
 Focus Galaxy is also an installable Progressive Web App (`manifest.webmanifest`, icons, and `/sw.js`). In secure contexts, the Service Worker stages and validates the application shell and hashed asset bundles before promoting them to the active cache (`focus-galaxy-shell-v1`), pruning stale build assets so repeat and offline launches stay coherent.
 

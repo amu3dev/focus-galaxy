@@ -32,6 +32,7 @@ type PlanetContentComposerProps = {
   onToggleTask: (id: string) => void;
   onDeleteEntry: (id: string) => void;
   onDraftStateChange: (hasDraft: boolean) => void;
+  revealEntry?: { id: string } | null;
 };
 
 const COMPLETED_COLLAPSE_THRESHOLD = 3;
@@ -79,6 +80,7 @@ export function PlanetContentComposer({
   onToggleTask,
   onDeleteEntry,
   onDraftStateChange,
+  revealEntry,
 }: PlanetContentComposerProps) {
   const [activeType, setActiveType] = useState<PlanetEntryType>('note');
   const [contentView, setContentView] = useState<PlanetContentView>('all');
@@ -99,6 +101,21 @@ export function PlanetContentComposer({
   const completedToggleRef = useRef<HTMLButtonElement>(null);
   const pendingTaskFocus = useRef<string | null>(null);
   const pendingDeleteFocus = useRef<{ entryId: string | null } | null>(null);
+  const composerRef = useRef<HTMLElement>(null);
+
+  useLayoutEffect(() => {
+    if (revealEntry) setContentView('all');
+  }, [revealEntry]);
+
+  useLayoutEffect(() => {
+    if (!revealEntry || contentView !== 'all') return;
+    const row = Array.from(composerRef.current?.querySelectorAll<HTMLElement>('[data-entry-id]') ?? [])
+      .find(element => element.dataset.entryId === revealEntry.id);
+    row?.scrollIntoView({ block: 'center', behavior: 'instant' });
+    const editor = editInputRef.current;
+    const target = editor && row?.contains(editor) ? editor : entryActionRefs.current.get(revealEntry.id);
+    target?.focus({ preventScroll: true });
+  }, [revealEntry, contentView]);
 
   const editingEntry = editingId ? entries.find((entry) => entry.id === editingId) : undefined;
   const editChanged = Boolean(editingEntry && editDraft !== editingEntry.text);
@@ -250,7 +267,8 @@ export function PlanetContentComposer({
     const temporal = getEntryTimestamp(entry);
     return (
       <li
-        className={`planet-content-item planet-content-item-${entry.type} ${entry.type === 'task' && entry.completed ? 'is-completed' : ''}`}
+        className={`planet-content-item planet-content-item-${entry.type} ${entry.type === 'task' && entry.completed ? 'is-completed' : ''} ${revealEntry?.id === entry.id ? 'is-orbit-selected' : ''}`}
+        data-entry-id={entry.id}
         key={entry.id}
       >
         {entry.type === 'note' ? (
@@ -370,7 +388,7 @@ export function PlanetContentComposer({
   );
 
   return (
-    <section className="planet-content-composer" aria-labelledby="planet-content-title" data-planet-composer>
+    <section ref={composerRef} className="planet-content-composer" aria-labelledby="planet-content-title" data-planet-composer>
       {pendingDeletion && (
         <div className="planet-content-delete-confirm" role="group" aria-label={`Confirm ${pendingDeletion.entry.type} deletion`}>
           <p role="alert">Permanently delete this {pendingDeletion.entry.type}? This cannot be undone.</p>

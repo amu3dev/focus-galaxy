@@ -438,6 +438,7 @@ async function main() {
     // Case 11: Reconnect and successfully retry Version B update while p2 has an active unsaved draft in Focus Mode
     prodServer.setFailRule(null);
     prodServer.setOnline(true);
+    await p2.send('Page.bringToFront');
     await click(p2, '.selected-panel-focus', true);
     await p2.wait(`!!document.querySelector('[data-testid="planet-focus-mode"]')`);
     await p2.evaluate(`(() => {
