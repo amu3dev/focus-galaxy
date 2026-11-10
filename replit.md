@@ -15,12 +15,14 @@ Production: https://focus-galaxy.amu3dev.workers.dev/ (Cloudflare Workers static
 
 ## Regression tests
 
-`test:id` runs directly in Node (`pnpm --filter @workspace/focus-galaxy run test:id`). Browser suites in `artifacts/focus-galaxy/scripts/` drive Chrome over CDP using `scripts/cdp-harness.mjs` and never launch a browser themselves.
+`test:id` and `test:galaxy-templates` run directly in Node (`pnpm --filter @workspace/focus-galaxy run <suite>`). Browser suites in `artifacts/focus-galaxy/scripts/` drive Chrome over CDP using `scripts/cdp-harness.mjs` and never launch a browser themselves.
 
 - Requirements: the dev server on `http://127.0.0.1:5173/` (`APP_URL`) and an **isolated** Chrome with `--remote-debugging-port=9228` (`CDP_PORT`) and a throwaway `--user-data-dir`. Headless (`--headless=new`) works.
 - `test:planet-interaction` and `test:planet-storage-content` attach to an existing page on the app origin. Open one first (e.g. `curl -X PUT "http://127.0.0.1:9228/json/new?http://127.0.0.1:5173/"`). The remaining browser suites create their own disposable browser contexts.
 - Run them one at a time with `pnpm --filter @workspace/focus-galaxy run <suite>`. They share a browser and contain timing-sensitive checks.
   - `test:id` — Node unit test for `createId()` with and without `crypto.randomUUID`.
+  - `test:galaxy-templates` — Node unit suite covering template catalog/ID/deep-isolation, initial orbit collision separation (`orbit-layout`), and transactional Genesis backup/restore/focus return.
+  - `test:galaxy-genesis` — CDP browser suite covering Blank Universe initialization, all 5 Genesis templates, Level 2 content, backup/restore, storage failures, cross-tab conflicts, keyboard focus, 320px touch, and reduced motion.
   - `test:planet-interaction` — real hit-testing of planets across panels, audio, viewports, and ~130 s of orbiting (`ORBIT_WAIT_MS`). About 3.5 min.
   - `test:planet-storage-content` — validation and recovery, quota failure and retry, completion and restoration, deletion confirmations, mobile viewports.
   - `test:planet-cross-tab` — revision-checked multi-tab saves, Web Locks queuing, fail-closed paths, conflict UI at 390×844 and 844×390.
@@ -43,7 +45,10 @@ Production: https://focus-galaxy.amu3dev.workers.dev/ (Cloudflare Workers static
 ## Where things live
 
 - `artifacts/focus-galaxy/src/App.tsx` — priority model, scoring, galaxy rendering and hit layer, panels, Manage dialog, keyboard shortcuts, storage hydration and validation, compact persistence warning strip and popover.
-- `artifacts/focus-galaxy/src/hooks/use-priority-persistence.ts` — revision-checked, Web Locks–coordinated localStorage writes and `navigator.storage.persist()` durability request.
+- `artifacts/focus-galaxy/src/hooks/use-priority-persistence.ts` — revision-checked, Web Locks–coordinated localStorage writes, transactional `.genesis-backup` / `.genesis-backup.pending` recovery slot, and `navigator.storage.persist()` durability request.
+- `artifacts/focus-galaxy/src/components/galaxy-genesis.tsx` — Galaxy Genesis template preview/creation portal and previous-galaxy restore dialog.
+- `artifacts/focus-galaxy/src/lib/galaxy-templates.ts` — 5 starting galaxy templates (`blank`, `first-orbit`, `full-galaxy`, `project-launch`, `balanced-week`) and `instantiateTemplate()`.
+- `artifacts/focus-galaxy/src/lib/orbit-layout.ts` — 3D projected orbit geometry and bounded initial-phase collision separation (`initialOrbitAngles()`).
 - `artifacts/focus-galaxy/src/components/planet-focus-mode.tsx` — full-screen Focus Mode for one planet, including `visualViewport` keyboard inset tracking.
 - `artifacts/focus-galaxy/src/components/planet-orbital-system.tsx` — Level 2 orbital moons and note fragments around the focused planet, preview card, pause/group controls, and composer handoff.
 - `artifacts/focus-galaxy/src/components/planet-content-composer.tsx` — notes and tasks: compose, edit, complete, delete with confirmation.
@@ -56,7 +61,7 @@ Production: https://focus-galaxy.amu3dev.workers.dev/ (Cloudflare Workers static
 
 ## Product
 
-- Six seeded priorities (Job Search, Learning, Consulting, SignalBoard, Family, Health) on first run. Reset restores them after confirmation.
+- Starts with a **Blank Universe** on first run (existing saved galaxies are preserved). Selecting **YOU / NOW** (or **Galaxy templates** in the mobile menu / header reset control) opens **Galaxy Genesis** to preview and apply 5 editable templates (`Blank Universe`, `First Orbit`, `Full Galaxy`, `Project Launch`, `Balanced Week`), with single-slot backup & restore (`focus-galaxy-priorities-v2.genesis-backup`).
 - Visual mapping is deterministic: importance → size, urgency → distance from center, energy → activity. The Focus Score is rule-based, 0–100, with no AI or external service.
 - Selecting a planet (click, tap, or `[` / `]` / arrow keys) opens the detail panel to rename and adjust importance, urgency, and energy. On mobile this is a bottom sheet.
 - Focus Signal / insight dock (`F`), Zen mode (`Z`), Manage dialog with Active and Completed tabs, and add priority.
