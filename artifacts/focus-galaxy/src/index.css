@@ -2435,3 +2435,98 @@ input[type=range]::-moz-range-thumb {
 @media (prefers-reduced-motion: reduce) {
   .planet-orbital-stage .planet-focus-orb-art, .planet-orbital-stage .orb-planet::before { animation: none; }
 }
+
+/* Galaxy Genesis inherits the existing solar core, palette and type system. */
+.core-container { appearance: none; padding: 0; border: 0; border-radius: 50%; background: transparent; touch-action: manipulation; }
+.core-container:focus-visible { outline: 2px solid #ffe4b6; outline-offset: 10px; }
+.core-container:hover .core-body, .core-container:focus-visible .core-body { filter: brightness(1.12); }
+.core-portal-cue { margin-top: 8px; color: #fff7e6; font-size: 9px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.blank-universe .insight-dock, .blank-universe .mobile-insights-trigger-slot, .blank-universe .galaxy-shortcuts { display: none; }
+.genesis-empty { position: absolute; top: 64%; left: 16px; right: 16px; z-index: 20; text-align: center; }
+.genesis-empty h1 { margin: 0; font-family: var(--font-display); font-size: clamp(22px, 3vw, 32px); font-weight: 600; }
+.genesis-empty p { margin: 9px 0 22px; color: #c9c0d9; font-size: 13px; }
+.genesis-empty > div { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; }
+.genesis-empty button { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; gap: 8px; padding: 0 18px; border: 1px solid #a98bcd70; border-radius: 999px; background: #241736; color: #f4eaff; font-size: 12px; font-weight: 700; cursor: pointer; touch-action: manipulation; }
+.genesis-empty .genesis-empty-add { border-color: #c396ff80; background: #613290; color: white; }
+.genesis-empty button:hover { background: #3b2554; }
+.genesis-overlay { position: fixed; inset: 0; z-index: 60; background: #04030cc7; backdrop-filter: blur(10px); animation: genesis-arrive 240ms ease-out; }
+.genesis-portal { position: fixed; z-index: 61; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; width: min(1056px, calc(100vw - 64px)); max-height: min(900px, calc(100dvh - 64px)); overflow: hidden; border: 1px solid #b795dc38; border-radius: 28px; background: radial-gradient(ellipse at 75% 30%, #2d18413d, transparent 65%), #0d0a19; color: #f4efff; box-shadow: 0 32px 100px #000a; animation: genesis-arrive 300ms ease-out; }
+.genesis-portal ::selection { background: #8b5cb8; color: #fff; }
+.genesis-portal button { cursor: pointer; touch-action: manipulation; }
+.genesis-portal button:focus-visible, .genesis-empty button:focus-visible { outline: 2px solid #e4c3ff; outline-offset: 3px; }
+.genesis-portal button:disabled { opacity: .5; cursor: not-allowed; }
+.genesis-heading { display: flex; flex: 0 0 auto; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 30px 32px 22px; }
+.genesis-heading h2 { margin: 0; font-family: var(--font-display); font-size: 27px; font-weight: 600; letter-spacing: -.015em; }
+.genesis-heading p { margin: 6px 0 0; color: #c0b5d1; font-size: 12px; line-height: 1.6; }
+.genesis-close { display: grid; flex: 0 0 44px; width: 44px; height: 44px; place-items: center; border: 1px solid #c8b3df33; border-radius: 50%; background: #ffffff06; color: #ddd2ef; }
+.genesis-close:hover { background: #ffffff14; color: white; }
+.genesis-body { display: grid; grid-template-columns: 310px minmax(0,1fr); min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 4px 24px 20px; gap: 24px; scrollbar-width: thin; scrollbar-color: #79648c transparent; }
+.genesis-choices { display: flex; flex-direction: column; gap: 8px; padding: 4px; }
+.genesis-choice { position: relative; display: flex; width: 100%; align-items: center; min-height: 86px; padding: 8px; gap: 8px; border: 1px solid transparent; border-radius: 14px; background: transparent; color: #c9bddb; text-align: left; transition: border-color 180ms ease, background-color 180ms ease; }
+.genesis-choice:hover { background: #ffffff06; border-color: #c8b3df33; }
+.genesis-choice[aria-pressed="true"] { background: color-mix(in srgb, var(--template-accent) 10%, #100d1b); border-color: color-mix(in srgb, var(--template-accent) 65%, transparent); }
+.genesis-miniature { width: 82px; height: 58px; flex: 0 0 82px; }
+.genesis-choice-copy { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
+.genesis-choice-copy strong { color: #f8f1ff; font-size: 13px; font-weight: 700; }
+.genesis-choice-copy > span { color: #c9bddb; font-size: 11px; }
+.genesis-choice-copy small { color: #b1a4c4; font-size: 9px; font-variant-numeric: tabular-nums; }
+.genesis-default { position: absolute; top: 6px; right: 8px; color: #ebd1a8; font-size: 8px; }
+.genesis-stage { display: flex; flex-direction: column; justify-content: center; min-width: 0; padding: 22px 4px 20px; text-align: center; }
+.genesis-stage-title h3 { margin: 0; font-family: var(--font-display); font-size: clamp(28px,3vw,38px); line-height: 1.15; font-weight: 500; }
+.genesis-stage-title p { max-width: 42ch; margin: 12px auto 0; color: #c6b9d9; font-size: 12px; line-height: 1.7; text-wrap: pretty; }
+.genesis-preview { position: relative; margin: 6px -6px; animation: genesis-arrive 350ms ease-out; }
+.genesis-preview::before { content: ''; position: absolute; inset: 12%; pointer-events: none; background: radial-gradient(ellipse, color-mix(in srgb, var(--template-accent) 12%, transparent), transparent 70%); }
+.genesis-universe { position: relative; display: block; width: 100%; height: auto; max-height: 310px; }
+.genesis-priority-names { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.genesis-counts { display: flex; justify-content: center; gap: 22px; color: #b9accb; font-size: 11px; font-variant-numeric: tabular-nums; }
+.genesis-counts strong { margin-right: 3px; color: #faf4ff; font-family: var(--font-display); font-size: 18px; font-weight: 500; }
+.genesis-hint { max-width: 44ch; margin: 16px auto 0; color: #b6a9c9; font-size: 11px; line-height: 1.7; text-wrap: pretty; }
+.genesis-footer { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; padding: 20px 32px 26px; border-top: 1px solid #c8b3df20; background: #100c1d; }
+.genesis-footer-copy { flex: 1 1 240px; }
+.genesis-footer-copy p { max-width: 43ch; margin: 0; color: #c6b8d7; font-size: 11px; line-height: 1.65; }
+.genesis-restore { display: inline-flex; min-height: 44px; align-items: center; gap: 7px; padding: 0; color: #e5ceff; font-size: 11px; text-decoration: underline; text-underline-offset: 3px; }
+.genesis-apply { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; gap: 14px; padding: 0 22px; border: 1px solid #dab5ff66; border-radius: 999px; background: #713da2; color: #fff; font-size: 12px; font-weight: 700; }
+.genesis-apply:hover:not(:disabled) { background: #8650b8; }
+.genesis-error, .genesis-saving { flex: 1 0 100%; margin: 0; color: #ffb9c9; font-size: 11px; line-height: 1.65; }
+.genesis-saving { color: #d0bfdc; }
+.genesis-wave { position: absolute; left: 50%; top: 50%; width: 150px; height: 150px; border: 1px solid #ffcb8b; border-radius: 50%; pointer-events: none; animation: genesis-radiate 1400ms ease-out both; }
+.genesis-forming .orb-screen-visual .orb-wrapper { animation: genesis-planet 850ms ease-out both; }
+.genesis-forming .orb-screen-visual:nth-of-type(2n) .orb-wrapper { animation-delay: 180ms; }
+.genesis-forming .orb-screen-visual:nth-of-type(3n) .orb-wrapper { animation-delay: 360ms; }
+.genesis-forming .core-body { filter: brightness(1.25); }
+@keyframes genesis-arrive { from { opacity: .35; } to { opacity: 1; } }
+@keyframes genesis-planet { from { opacity: .1; filter: brightness(1.6); } to { opacity: 1; filter: brightness(1); } }
+@keyframes genesis-radiate { from { transform: translate(-50%, -50%) scale(.8); opacity: .8; } to { transform: translate(-50%, -50%) scale(7); opacity: 0; } }
+@media (max-width: 700px) {
+  .genesis-portal { width: 100%; max-height: 100dvh; height: 100dvh; border-radius: 0; border: 0; }
+  .genesis-heading { padding: calc(env(safe-area-inset-top,0px) + 16px) 16px 14px; }
+  .genesis-heading h2 { font-size: 23px; }
+  .genesis-heading p { max-width: 26ch; font-size: 11px; }
+  .genesis-body { display: flex; flex-direction: column; gap: 10px; padding: 0 12px 18px; }
+  .genesis-choices { flex: 0 0 auto; flex-direction: row; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: thin; scrollbar-color: #79648c transparent; }
+  .genesis-choice { flex: 0 0 156px; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; padding: 10px 12px; scroll-snap-align: start; }
+  .genesis-choice .genesis-miniature { flex: 0 0 40px; height: 40px; width: 78px; }
+  .genesis-choice-copy { gap: 4px; }
+  .genesis-choice-copy strong { font-size: 12px; }
+  .genesis-choice-copy > span { font-size: 10px; }
+  .genesis-stage { flex: 0 0 auto; padding: 14px 8px 10px; }
+  .genesis-stage-title h3 { font-size: 27px; }
+  .genesis-stage-title p { margin-top: 8px; font-size: 11px; }
+  .genesis-preview { margin: 0 -10px; }
+  .genesis-universe { max-height: 220px; }
+  .genesis-planet-label { display: none; }
+  .genesis-priority-names { position: static; display: flex; justify-content: center; flex-wrap: wrap; width: auto; height: auto; overflow: visible; clip-path: none; margin: 0 0 16px; padding: 0; gap: 5px 12px; color: #c9bddb; font-size: 10px; list-style: none; }
+  .genesis-hint { margin-top: 10px; }
+  .genesis-choice { min-height: 80px; }
+  .genesis-footer { gap: 10px; padding: 14px 16px calc(env(safe-area-inset-bottom,0px) + 14px); }
+  .genesis-footer-copy { flex-basis: 100%; }
+  .genesis-footer-copy p { font-size: 10px; }
+  .genesis-apply { width: 100%; padding: 0 12px; }
+  .genesis-empty { top: 63%; }
+  .genesis-empty > div { flex-direction: column; align-items: center; gap: 8px; }
+  .genesis-empty p { font-size: 12px; margin-bottom: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .genesis-wave { display: none; }
+  .genesis-portal, .genesis-overlay, .genesis-preview, .genesis-forming .orb-screen-visual .orb-wrapper { animation: none; }
+}

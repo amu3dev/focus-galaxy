@@ -6,18 +6,18 @@ Focus Galaxy is a local-first focus and priority map that turns tasks into an in
 
 ![Focus Galaxy running in a desktop browser, captured at 1440×900](docs/assets/focus-galaxy-desktop.jpg)
 
-*Captured from the running app with its six seeded sample priorities.*
+*Historical capture of the earlier sample galaxy; new installations now start empty.*
 
 ![Focus Galaxy running in a phone-sized browser, captured at 390×844](docs/assets/focus-galaxy-mobile.jpg)
 
-*The same live app and sample priorities at a phone-sized viewport.*
+*Historical phone-sized capture of the earlier sample galaxy.*
 
 ## What it does
 
 - Maps importance, urgency, and effort to visual position, size, and activity.
 - Shows a deterministic Focus Score from 0–100 with a short rule-based interpretation.
 - Lets you add, edit, remove, reset, and locally persist priorities.
-- Starts with six seeded priorities so the product is useful immediately.
+- Starts with a Blank Universe; the YOU / NOW center opens five editable galaxy templates.
 - Runs without an API key or external service.
 
 The MVP is intentionally frontend-only: priority data is stored in the browser with `localStorage`. The repository is a pnpm workspace that also contains the supporting API and database packages for future extension.
@@ -55,6 +55,8 @@ with remote debugging enabled. Open the app in that profile, then run:
 
 ```bash
 pnpm --filter @workspace/focus-galaxy run test:id
+pnpm --filter @workspace/focus-galaxy run test:galaxy-templates
+pnpm --filter @workspace/focus-galaxy run test:galaxy-genesis
 pnpm --filter @workspace/focus-galaxy run test:planet-storage-content
 pnpm --filter @workspace/focus-galaxy run test:planet-interaction
 pnpm --filter @workspace/focus-galaxy run test:planet-orbital
@@ -77,6 +79,48 @@ suite includes a 130-second orbital observation.
 `test:planet-orbital` covers Level 2 task moons and note fragments, real mouse/touch
 selection, completion and editing persistence, motion/pause and reduced motion,
 grouped browsing, and clean Level 1 restoration. It uses disposable contexts.
+
+## Galaxy Genesis
+
+Select **YOU / NOW** (or **Galaxy templates** in the mobile controls) to preview
+starting worlds without changing your current galaxy. Each populated template
+becomes ordinary editable priorities with its own Level 2 tasks and notes.
+
+| Template | Priorities | Tasks | Notes |
+| --- | ---: | ---: | ---: |
+| Blank Universe | 0 | 0 | 0 |
+| First Orbit | 3 | 4 | 2 |
+| Full Galaxy | 6 | 12 | 6 |
+| Project Launch | 4 | 9 | 4 |
+| Balanced Week | 5 | 8 | 3 |
+
+Only a missing storage key initializes a new installation. A saved empty array
+stays empty, and existing saved galaxies—including old examples—are preserved.
+The former reset-to-examples control now opens Genesis instead.
+
+Replacing a populated galaxy requires confirmation. The same exclusive Web Lock
+and exact-byte revision check used by normal edits guard template application.
+The current galaxy is copied to `focus-galaxy-priorities-v2.genesis-backup` before
+the active snapshot changes. A temporary `.genesis-backup.pending` undo record
+protects the older recovery copy until the active write commits; failed rollback
+or interrupted cleanup is resolved under the same Web Lock before further writes.
+A failed backup, failed write, or stale revision leaves the session galaxy
+unchanged. **Restore previous galaxy** in Genesis
+restores that copy, including tasks and notes, even after refresh. This is a
+single recovery slot: the next populated replacement saves the then-current
+galaxy over the previous backup. Recovery remains local to this browser
+and origin; clearing browser data removes both the galaxy and its backup.
+
+Creation uses a short solar wave and staged planet reveal, skipped for reduced
+motion. Initial orbital phases have bounded collision avoidance; urgency still
+sets orbital radius, importance sets size, and existing motion/Focus Score rules
+are unchanged. This does not add continuous collision avoidance to moving orbits.
+
+`test:galaxy-templates` runs browser-free catalog/ID/isolation, full-orbit placement,
+and actual-source recovery/focus checks. `test:galaxy-genesis` uses disposable CDP contexts for blank initialization,
+all five previews/applications, Level 2 content/editing, reload/reapplication,
+confirmation/recovery, storage failures, queued cross-tab conflicts, keyboard,
+320px touch, and reduced motion. Run browser suites serially.
 
 Focus Galaxy is also an installable Progressive Web App (`manifest.webmanifest`, icons, and `/sw.js`). In secure contexts, the Service Worker stages and validates the application shell and hashed asset bundles before promoting them to the active cache (`focus-galaxy-shell-v1`), pruning stale build assets so repeat and offline launches stay coherent.
 

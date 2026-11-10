@@ -194,8 +194,8 @@ async function main() {
     for (const raw of ['{broken-json', '{"unexpected":"object"}']) {
       await load(null, 1440, 900, { raw });
       assert.ok((await recoveryCopies()).includes(raw));
-      assert.ok((await saved()).length > 0);
-      assert.ok(await evaluate(`document.querySelectorAll('.orb-screen-hit').length > 0`));
+      assert.deepEqual(await saved(), []);
+      assert.equal(await evaluate(`document.querySelectorAll('.orb-screen-hit').length`), 0);
     }
   });
 

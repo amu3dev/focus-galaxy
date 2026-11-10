@@ -20,6 +20,15 @@
         ],
         "createdAt": "2026-11-09T10:36:11.287Z",
         "reason": "Agent: existing --font-sans product body font is unchanged; typography replacement is outside the responsive fix"
+      },
+      {
+        "rule": "bounce-easing",
+        "value": "eq-bounce",
+        "files": [
+          "src/index.css"
+        ],
+        "createdAt": "2026-11-10T08:17:11.836Z",
+        "reason": "Agent: pre-existing audio equalizer animates bar heights with ease-in-out, not elastic easing; animation name is a false positive"
       }
     ]
   }

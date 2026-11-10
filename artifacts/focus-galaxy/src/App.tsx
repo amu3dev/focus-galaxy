@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, memo, type CSSProperties, type Re
 import { createPortal } from 'react-dom';
 import { createId } from '@/lib/utils';
 import { PRIORITY_STORAGE_KEY, usePriorityPersistence } from '@/hooks/use-priority-persistence';
-import { Plus, RotateCcw, X, Target, Activity, Orbit, Trash2, ListChecks, Volume2, VolumeX, Music2, CheckCircle2, ChevronDown, ChevronUp, SunMedium, MoreHorizontal } from 'lucide-react';
+import { Plus, X, Target, Activity, Orbit, Trash2, ListChecks, Volume2, VolumeX, Music2, CheckCircle2, ChevronDown, ChevronUp, SunMedium, MoreHorizontal } from 'lucide-react';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
@@ -35,19 +35,9 @@ import { Route, Switch } from 'wouter';
 import { MotionConfig, motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { PlanetFocusMode, type PlanetFocusOrigin } from '@/components/planet-focus-mode';
 import type { PlanetEntry, PlanetEntryType } from '@/components/planet-content-composer';
-
-type Priority = {
-  id: string;
-  name: string;
-  importance: number;
-  urgency: number;
-  energy: number;
-  hue: string;
-  entries?: PlanetEntry[];
-  completed?: boolean;
-  // Read only for migration from the first Planet Focus Mode notes field.
-  notes?: string;
-};
+import { GalaxyGenesis } from '@/components/galaxy-genesis';
+import { instantiateTemplate, type GalaxyTemplate, type Priority } from '@/lib/galaxy-templates';
+import { initialOrbitAngles } from '@/lib/orbit-layout';
 
 type MetricKey = 'importance' | 'urgency' | 'energy';
 
@@ -270,24 +260,8 @@ async function startSpotifyAuthorization() {
   window.location.assign(authorizeUrl.toString());
 }
 
-const seedPriorities: Priority[] = [
-  { id: 'job-search', name: 'Job Search', importance: 8, urgency: 9, energy: 7, hue: '#f04e76' },
-  { id: 'learning', name: 'Learning', importance: 6, urgency: 4, energy: 7, hue: '#9b5be4' },
-  { id: 'consulting', name: 'Consulting', importance: 7, urgency: 7, energy: 6, hue: '#3aa2f7' },
-  { id: 'signalboard', name: 'SignalBoard', importance: 9, urgency: 5, energy: 8, hue: '#f1883b' },
-  { id: 'family', name: 'Family', importance: 10, urgency: 6, energy: 4, hue: '#466bf0' },
-  { id: 'health', name: 'Health', importance: 8, urgency: 8, energy: 5, hue: '#85d852' },
-];
+const blankPriorities: Priority[] = [];
 
-function getPlanetBaseAngle(id: string): number {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) {
-    hash = ((hash << 5) - hash) + id.charCodeAt(i);
-    hash |= 0;
-  }
-  const degrees = Math.abs(hash) % 360;
-  return (degrees * Math.PI) / 180;
-}
 
 function playCosmicChime(freq = 523.25) {
   try {
@@ -367,14 +341,14 @@ type PriorityStorageState = {
 };
 
 function readPriorities(): PriorityStorageState {
-  if (typeof window === 'undefined') return { priorities: seedPriorities, snapshot: null, needsRecovery: false };
+  if (typeof window === 'undefined') return { priorities: blankPriorities, snapshot: null, needsRecovery: false };
   let saved: string | null = null;
   try {
     saved = window.localStorage.getItem(STORAGE_KEY);
-    if (saved === null) return { priorities: seedPriorities, snapshot: null, needsRecovery: false };
+    if (saved === null) return { priorities: blankPriorities, snapshot: null, needsRecovery: false };
     const parsed: unknown = JSON.parse(saved);
     if (!Array.isArray(parsed)) {
-      return { priorities: seedPriorities, snapshot: saved, needsRecovery: true };
+      return { priorities: blankPriorities, snapshot: saved, needsRecovery: true };
     }
 
     const validPriorities = parsed.filter(isPriority);
@@ -441,7 +415,7 @@ function readPriorities(): PriorityStorageState {
     });
     return { priorities, snapshot: saved, needsRecovery: hasRejectedData };
   } catch {
-    return { priorities: seedPriorities, snapshot: saved ?? undefined, needsRecovery: saved !== null };
+    return { priorities: blankPriorities, snapshot: saved ?? undefined, needsRecovery: saved !== null };
   }
 }
 
@@ -475,7 +449,8 @@ function useParallax() {
 
   const handleMouseMove = (e: React.MouseEvent) => {
     // Portal targets follow the tilted scene; do not move them mid-click.
-    if (e.target instanceof Element && e.target.closest('#orb-hit-layer')) return;
+    if (e.target instanceof Element && e.target.closest('#orb-hit-layer, .core-container')) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     if (typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches) return;
     const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
     const x = (e.clientX - left) / width - 0.5;
@@ -1751,7 +1726,7 @@ function SelectedOrbitRing({ priority }: { priority: Priority }) {
 
 function OrbComponent({ 
   priority, 
-  index, 
+  baseAngle,
   selectedId,
   onSelect,
   isCompleting,
@@ -1759,7 +1734,7 @@ function OrbComponent({
   prefersReducedMotion 
 }: { 
   priority: Priority; 
-  index: number; 
+  baseAngle: number;
   selectedId: string | null;
   onSelect: (id: string) => void;
   isCompleting: boolean;
@@ -1776,7 +1751,6 @@ function OrbComponent({
     setHitLayer(document.getElementById('orb-hit-layer'));
   }, []);
   
-  const baseAngle = useMemo(() => getPlanetBaseAngle(priority.id), [priority.id]);
   const drift = useMotionValue(0);
   const planetRef = useRef<HTMLDivElement>(null);
   const hitX = useMotionValue(0);
@@ -2016,11 +1990,11 @@ function OrbComponent({
 function LivingCore({
   topPriorities,
   totalPriorities,
-  onSelectTop,
+  onOpenGenesis,
 }: {
   topPriorities: Priority[];
   totalPriorities: number;
-  onSelectTop: () => void;
+  onOpenGenesis: () => void;
 }) {
   const [isHovered, setIsHovered] = useState(false);
   const lead = topPriorities[0];
@@ -2031,25 +2005,19 @@ function LivingCore({
   }, [topPriorities, totalPriorities]);
 
   return (
-    <motion.div
+    <motion.button
+      type="button"
       className="core-container w-[132px] h-[132px] md:w-[150px] md:h-[150px] z-10"
-      // Motion owns this transform, including centering during hover/tap scaling.
+      // Keep the native hit target fixed; the solar surface supplies feedback.
       style={{ x: '-50%', y: '-50%' }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      onClick={onSelectTop}
-      whileHover={{ scale: 1.05 }}
-      whileTap={{ scale: 0.96 }}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onSelectTop();
-        }
-      }}
-      aria-label="Center of Gravity: YOU / NOW. Click to focus highest priority."
-      title="YOU / NOW • Center of Gravity (Click to select highest focus)"
+      onFocus={() => setIsHovered(true)}
+      onBlur={() => setIsHovered(false)}
+      onClick={onOpenGenesis}
+      aria-label="YOU / NOW: Open Galaxy Genesis"
+      aria-haspopup="dialog"
+      title="Explore galaxy templates"
     >
       <div className="core-corona" />
       <div className="core-grav-wave" />
@@ -2058,6 +2026,7 @@ function LivingCore({
       <div className="core-text">
         <span className="core-title">YOU / NOW</span>
         <span className="core-subtitle">Center of Gravity</span>
+        <span className="core-portal-cue">Explore templates</span>
       </div>
       <AnimatePresence>
         {isHovered && (
@@ -2081,7 +2050,7 @@ function LivingCore({
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.div>
+    </motion.button>
   );
 }
 
@@ -2116,7 +2085,12 @@ function FocusGalaxyContainer() {
   const [initialStorage] = useState(readPriorities);
   const [priorities, setPriorities] = useState(initialStorage.priorities);
   const activePriorities = useMemo(() => priorities.filter((priority) => !priority.completed), [priorities]);
-  const { status: persistenceStatus, retry: retrySave } = usePriorityPersistence(
+  const orbitAngles = useRef(new Map<string, number>());
+  const initialAngles = useMemo(() => {
+    orbitAngles.current = initialOrbitAngles(activePriorities, window.innerWidth, window.innerHeight, orbitAngles.current);
+    return orbitAngles.current;
+  }, [activePriorities]);
+  const { status: persistenceStatus, retry: retrySave, backup, replacePriorities } = usePriorityPersistence(
     priorities, initialStorage.snapshot, initialStorage.needsRecovery,
   );
   const [exportFailed, setExportFailed] = useState(false);
@@ -2124,6 +2098,8 @@ function FocusGalaxyContainer() {
   const [selectedId, setSelectedId] = useState<string | null>(initialStorage.priorities.find((priority) => !priority.completed)?.id ?? null);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isManageOpen, setIsManageOpen] = useState(false);
+  const [isGenesisOpen, setIsGenesisOpen] = useState(false);
+  const [genesisAnimation, setGenesisAnimation] = useState(false);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [isMobileViewport, setIsMobileViewport] = useState(
     () => typeof window !== 'undefined' && window.matchMedia(MOBILE_VIEWPORT_QUERY).matches,
@@ -2148,6 +2124,34 @@ function FocusGalaxyContainer() {
   
   const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const isPlanetFocusOpen = focusSession !== null && activePriorities.some((priority) => priority.id === focusSession.priorityId);
+
+  useEffect(() => {
+    if (!genesisAnimation) return;
+    const timer = window.setTimeout(() => setGenesisAnimation(false), 1600);
+    return () => window.clearTimeout(timer);
+  }, [genesisAnimation]);
+
+  const applyGalaxy = async (next: Priority[], signal: AbortSignal) => {
+    if (!await replacePriorities(next, signal)) return false;
+    setPriorities(next);
+    setSelectedId(null);
+    setFocusSession(null);
+    setIsSelectedPanelExpanded(false);
+    setIsGenesisOpen(false);
+    setPanelsOpen(false);
+    setGenesisAnimation(!prefersReducedMotion);
+    toast({ title: 'Your universe is ready', description: next.length ? 'Select a planet, then Enter Focus to explore its tasks and notes.' : 'A little space for what matters. Add your first priority when you’re ready.' });
+    return true;
+  };
+
+  const applyTemplate = (template: GalaxyTemplate, signal: AbortSignal) => applyGalaxy(instantiateTemplate(template), signal);
+  const restoreGalaxy = async (signal: AbortSignal) => {
+    try {
+      const previous: unknown = JSON.parse(backup ?? 'null');
+      if (!Array.isArray(previous) || !previous.every(p => isPriority(p) && (p.entries === undefined || (Array.isArray(p.entries) && p.entries.every(isPlanetEntry))))) return false;
+      return await applyGalaxy(previous, signal);
+    } catch { return false; }
+  };
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(MOBILE_VIEWPORT_QUERY);
@@ -2349,29 +2353,16 @@ function FocusGalaxyContainer() {
       : priority));
   };
 
-  const requestResetPriorities = () => {
-    openConfirmation({
-      title: 'Reset your galaxy?',
-      description: 'Restore the original priorities and remove your changes.',
-      confirmLabel: 'Reset Galaxy',
-      onConfirm: () => {
-        setPriorities(seedPriorities);
-        setSelectedId(null);
-        setIsSelectedPanelExpanded(false);
-        setIsMobileMenuOpen(false);
-        toast({
-          title: "Galaxy Reset",
-          description: "Initial solar priorities restored.",
-        });
-      },
-    });
+  const openGenesis = () => {
+    setIsMobileMenuOpen(false);
+    setIsGenesisOpen(true);
   };
 
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target instanceof HTMLElement ? e.target : null;
-      if (isAddOpen || isManageOpen || confirmation || isMobileMenuOpen || isPlanetFocusOpen) return;
+      if (isAddOpen || isManageOpen || isGenesisOpen || confirmation || isMobileMenuOpen || isPlanetFocusOpen) return;
       if (target?.closest('[role="tablist"], [role="dialog"], [role="alertdialog"]')) return;
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName ?? '')) return;
       if (e.key === 'Escape') {
@@ -2405,7 +2396,7 @@ function FocusGalaxyContainer() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activePriorities, selectedId, isAddOpen, isManageOpen, confirmation, isMobileMenuOpen, isPlanetFocusOpen]);
+  }, [activePriorities, selectedId, isAddOpen, isManageOpen, isGenesisOpen, confirmation, isMobileMenuOpen, isPlanetFocusOpen]);
 
   const rankedPriorities = useMemo(
     () => [...activePriorities].sort((a, b) => getFocusScore(b) - getFocusScore(a)),
@@ -2523,7 +2514,7 @@ function FocusGalaxyContainer() {
   return (
     <div 
       ref={galaxyAppRef}
-      className={`focus-galaxy-app relative w-full h-[100dvh] overflow-hidden bg-background select-none${isMobileViewport ? ' mobile-ui-viewport' : ''} ${isZenMode ? 'zen-mode' : ''}${isMobileViewport && isSelectedPanelExpanded ? ' mobile-detail-expanded' : ''}`}
+      className={`focus-galaxy-app relative w-full h-[100dvh] overflow-hidden bg-background select-none${isMobileViewport ? ' mobile-ui-viewport' : ''} ${isZenMode ? 'zen-mode' : ''}${isMobileViewport && isSelectedPanelExpanded ? ' mobile-detail-expanded' : ''}${priorities.length === 0 ? ' blank-universe' : ''}${genesisAnimation ? ' genesis-forming' : ''}`}
       style={cosmosVisualStyle}
       aria-hidden={isPlanetFocusOpen}
       onKeyDownCapture={(event) => {
@@ -2595,9 +2586,9 @@ function FocusGalaxyContainer() {
                   <span className="mobile-control-label">Manage priorities</span>
                 </button>
 
-                <button onClick={() => { setIsMobileMenuOpen(false); requestResetPriorities(); }} className="header-reset w-10 h-10 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors shadow-[0_4px_10px_rgba(0,0,0,0.5)]" aria-label="Reset priorities">
-                  <RotateCcw size={16} />
-                  <span className="mobile-control-label">Reset galaxy</span>
+                <button onClick={openGenesis} className="header-reset w-10 h-10 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors shadow-[0_4px_10px_rgba(0,0,0,0.5)]" aria-label="Explore galaxy templates" title="Explore galaxy templates">
+                  <Orbit size={16} />
+                  <span className="mobile-control-label">Galaxy templates</span>
                 </button>
               </div>
             </div>
@@ -2616,7 +2607,7 @@ function FocusGalaxyContainer() {
             </button>
           </div>
         </div>
-        {storageWarning && !isPlanetFocusOpen && !isManageOpen && storageWarning}
+        {storageWarning && !isPlanetFocusOpen && !isManageOpen && !isGenesisOpen && storageWarning}
         <Toaster />
       </header>
 
@@ -2717,15 +2708,15 @@ function FocusGalaxyContainer() {
             )}
 
             <AnimatePresence>
-              {activePriorities.map((p, i) => (
+              {activePriorities.map((p) => (
                 <OrbComponent
                   key={p.id}
                   priority={p}
-                  index={i}
+                  baseAngle={initialAngles.get(p.id)!}
                   selectedId={selectedId}
                   onSelect={selectPriority}
                   isCompleting={false}
-                  isFocusModeOpen={isPlanetFocusOpen}
+                  isFocusModeOpen={isPlanetFocusOpen || isGenesisOpen || genesisAnimation}
                   prefersReducedMotion={prefersReducedMotion}
                 />
               ))}
@@ -2736,13 +2727,19 @@ function FocusGalaxyContainer() {
           <LivingCore
             topPriorities={topPriorities}
             totalPriorities={activePriorities.length}
-            onSelectTop={() => {
-              if (topPriorities[0]) selectPriority(topPriorities[0].id);
-            }}
+            onOpenGenesis={() => setIsGenesisOpen(true)}
           />
+          {genesisAnimation && <div className="genesis-wave" aria-hidden="true" />}
           
         </div>
       </motion.div>
+
+      {priorities.length === 0 && <section className="genesis-empty" aria-label="Your Blank Universe">
+        <h1>A little space for what matters.</h1>
+        <p>Your universe begins with one priority.</p>
+        <div><button type="button" className="genesis-empty-add" onClick={() => setIsAddOpen(true)}><Plus size={15} /> Add your first priority</button>
+          <button type="button" onClick={() => setIsGenesisOpen(true)}>Explore templates <Orbit size={15} /></button></div>
+      </section>}
 
       <div className="cosmos-dim-layer absolute inset-0 z-[15] pointer-events-none" aria-hidden="true" />
       <div className="cosmos-lift-layer absolute inset-0 z-[15] pointer-events-none" aria-hidden="true" />
@@ -2842,6 +2839,16 @@ function FocusGalaxyContainer() {
         />
       </AnimatePresence>
 
+
+      {isGenesisOpen && <GalaxyGenesis
+        onClose={() => setIsGenesisOpen(false)}
+        onApply={applyTemplate}
+        onRestore={restoreGalaxy}
+        hasContent={priorities.length > 0}
+        backupAvailable={backup !== null}
+        canApply={persistenceStatus === 'saved'}
+        storageWarning={storageWarning}
+      />}
 
       {focusPriority && focusSession && createPortal(
         <PlanetFocusMode

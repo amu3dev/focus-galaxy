@@ -1,3 +1,6 @@
+import { galaxyTemplates, instantiateTemplate } from '../src/lib/galaxy-templates.ts';
+
+const fixture = instantiateTemplate(galaxyTemplates.find(template => template.id === 'full-galaxy'));
 const port = Number(process.env.CDP_PORT || 9228);
 const baseUrl = process.env.APP_URL || 'http://127.0.0.1:5173/';
 const appOrigin = new URL(baseUrl).origin;
@@ -36,6 +39,7 @@ async function connect() {
     if (message.id && pending.has(message.id)) {
       const request = pending.get(message.id);
       pending.delete(message.id);
+      clearTimeout(request.timeout);
       if (message.error) request.reject(new Error(`${message.error.code}: ${message.error.message}`));
       else request.resolve(message.result);
     }
@@ -52,6 +56,13 @@ async function connect() {
       runtimeErrors.push({ type: 'log', text: message.params.entry.text || message.params.entry.source || 'browser log error' });
     }
   });
+  socket.addEventListener('close', () => {
+    for (const request of pending.values()) {
+      clearTimeout(request.timeout);
+      request.reject(new Error('CDP closed before interaction checks completed'));
+    }
+    pending.clear();
+  });
   await send('Runtime.enable');
   await send('Log.enable');
   await send('Page.enable');
@@ -60,7 +71,11 @@ async function connect() {
 function send(method, params = {}) {
   const id = nextId++;
   return new Promise((resolve, reject) => {
-    pending.set(id, { resolve, reject });
+    const timeout = setTimeout(() => {
+      pending.delete(id);
+      reject(new Error(`CDP timeout: ${method}`));
+    }, 15000);
+    pending.set(id, { resolve, reject, timeout });
     socket.send(JSON.stringify({ id, method, params }));
   });
 }
@@ -81,10 +96,10 @@ async function evaluate(expression) {
 async function navigateFresh() {
   await send('Page.bringToFront');
   await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
-  // Clear before app code executes so stale state cannot contaminate this run.
+  // Seed before app code executes so stale state cannot contaminate this run.
   await send('Page.addScriptToEvaluateOnNewDocument', { source: `
     if (location.origin === ${JSON.stringify(appOrigin)}) {
-      localStorage.removeItem('focus-galaxy-priorities-v2');
+      localStorage.setItem('focus-galaxy-priorities-v2', ${JSON.stringify(JSON.stringify(fixture))});
       sessionStorage.clear();
     }
   ` });

@@ -8,6 +8,8 @@
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:galaxy-templates": "node scripts/galaxy-template-data-regression.mjs && node scripts/orbit-layout-regression.mjs && node scripts/galaxy-genesis-blockers-regression.mjs",
+    "test:galaxy-genesis": "node scripts/galaxy-genesis-regression.mjs",
     "test:planet-interaction": "node scripts/planet-interaction-regression.mjs",
     "test:planet-orbital": "node scripts/planet-orbital-regression.mjs",
     "test:planet-storage-content": "node scripts/planet-storage-content-regression.mjs",

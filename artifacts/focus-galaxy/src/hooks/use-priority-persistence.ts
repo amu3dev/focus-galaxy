@@ -2,6 +2,31 @@ import { useEffect, useRef, useState } from 'react';
 
 export const PRIORITY_STORAGE_KEY = 'focus-galaxy-priorities-v2';
 const WRITE_LOCK = `${PRIORITY_STORAGE_KEY}:write`;
+export const GENESIS_BACKUP_KEY = `${PRIORITY_STORAGE_KEY}.genesis-backup`;
+const GENESIS_PENDING_KEY = `${GENESIS_BACKUP_KEY}.pending`;
+
+function pendingGenesisBackup(): { snapshot: string; backup: string | null } | null {
+  const saved = window.localStorage.getItem(GENESIS_PENDING_KEY);
+  if (saved === null) return null;
+  const pending = JSON.parse(saved);
+  if (!pending || typeof pending.snapshot !== 'string' || (pending.backup !== null && typeof pending.backup !== 'string')) {
+    throw new Error('Invalid pending galaxy backup');
+  }
+  return pending;
+}
+
+// Under WRITE_LOCK: resolve the durable undo record before any further write.
+function finishGenesisBackup() {
+  const pending = pendingGenesisBackup();
+  if (!pending) return;
+  if (window.localStorage.getItem(PRIORITY_STORAGE_KEY) !== pending.snapshot
+    && window.localStorage.getItem(GENESIS_BACKUP_KEY) !== pending.backup) {
+    if (pending.backup === null) window.localStorage.removeItem(GENESIS_BACKUP_KEY);
+    else window.localStorage.setItem(GENESIS_BACKUP_KEY, pending.backup);
+  }
+  window.localStorage.removeItem(GENESIS_PENDING_KEY);
+}
+
 type PersistenceStatus = 'pending' | 'saved' | 'error' | 'conflict' | 'recovery-blocked' | 'unavailable';
 
 // Called only while holding WRITE_LOCK, after checking the source revision.
@@ -34,6 +59,58 @@ export function usePriorityPersistence(
   const recoveryPending = useRef(needsRecovery);
   const [status, setStatus] = useState<PersistenceStatus>('pending');
   const [attempt, setAttempt] = useState(0);
+  const replacing = useRef(false);
+  const [backup, setBackup] = useState<string | null>(() => {
+    try {
+      const pending = pendingGenesisBackup();
+      if (pending && window.localStorage.getItem(PRIORITY_STORAGE_KEY) !== pending.snapshot) return pending.backup;
+      return window.localStorage.getItem(GENESIS_BACKUP_KEY);
+    } catch { return null; }
+  });
+
+  // Template replacement uses the same revision and lock as ordinary edits.
+  // Commit storage first: a failed backup/write must not replace session data.
+  const replacePriorities = async (nextPriorities: unknown[], signal?: AbortSignal): Promise<boolean> => {
+    if (replacing.current || status !== 'saved' || conflict.current || recoveryBlocked.current || !navigator.locks?.request) return false;
+    replacing.current = true;
+    setStatus('pending');
+    try {
+      return await navigator.locks.request(WRITE_LOCK, { mode: 'exclusive', signal }, () => {
+        if (conflict.current || window.localStorage.getItem(PRIORITY_STORAGE_KEY) !== revision.current) {
+          conflict.current = true;
+          setStatus('conflict');
+          return false;
+        }
+        const previous = JSON.stringify(priorities);
+        // Reject unsaved state, including a state update whose effect has not run.
+        if (previous !== revision.current) { setStatus('pending'); return false; }
+        const next = JSON.stringify(nextPriorities);
+        finishGenesisBackup(); // Fail closed if an earlier commit cannot be finalized.
+        if (next !== previous) {
+          if (priorities.length > 0) {
+            window.localStorage.setItem(GENESIS_PENDING_KEY, JSON.stringify({ snapshot: next, backup: window.localStorage.getItem(GENESIS_BACKUP_KEY) }));
+          }
+          try {
+            if (priorities.length > 0) window.localStorage.setItem(GENESIS_BACKUP_KEY, previous);
+            window.localStorage.setItem(PRIORITY_STORAGE_KEY, next);
+          } catch (error) {
+            try { finishGenesisBackup(); } catch { /* The undo record survives failed rollback and reload. */ }
+            throw error;
+          }
+          revision.current = next;
+          if (priorities.length > 0) setBackup(previous);
+          try { finishGenesisBackup(); } catch { /* Retry cleanup before any subsequent active write. */ }
+        }
+        setStatus('saved');
+        return true;
+      });
+    } catch {
+      setStatus(conflict.current ? 'conflict' : signal?.aborted ? 'saved' : 'error');
+      return false;
+    } finally {
+      replacing.current = false;
+    }
+  };
 
   useEffect(() => {
     try {
@@ -99,6 +176,7 @@ export function usePriorityPersistence(
         setStatus('conflict');
         return;
       }
+      finishGenesisBackup();
       if (recoveryPending.current && current !== null && !backUpRejectedSnapshot(current)) {
         recoveryBlocked.current = true;
         setStatus('recovery-blocked');
@@ -121,5 +199,5 @@ export function usePriorityPersistence(
     };
   }, [priorities, attempt]);
 
-  return { status, retry: () => setAttempt((current) => current + 1) };
+  return { status, retry: () => setAttempt((current) => current + 1), backup, replacePriorities };
 }

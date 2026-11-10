@@ -90,10 +90,12 @@ async function enter(c, id = fixture.id) {
   await exists(c, '[data-testid="planet-focus-mode"]');
   await exists(c, '.planet-orbital-system');
   await c.wait(`getComputedStyle(document.querySelector('[data-testid="planet-focus-mode"]')).opacity==='1'`);
+  await c.evaluate('document.fonts.ready');
 }
 async function leave(c) {
   await act(c, '.planet-focus-back');
   await c.wait(`!document.querySelector('[data-testid="planet-focus-mode"]') && !document.querySelector('.planet-orbit-object')`);
+  await c.wait(`document.activeElement?.matches('.selected-panel-focus')`);
 }
 async function readObjects(c) {
   return c.evaluate(`Array.from(document.querySelectorAll('.planet-orbit-object'), e => ({

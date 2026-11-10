@@ -3,6 +3,10 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { CDP, viewport, pointer, target, click, key, screenshot } from './cdp-harness.mjs';
+import { galaxyTemplates, instantiateTemplate } from '../src/lib/galaxy-templates.ts';
+
+const fixture = instantiateTemplate(galaxyTemplates.find(template => template.id === 'full-galaxy'))
+  .map((priority, index) => ({ ...priority, id: `ux-${index}` }));
 
 const port = Number(process.env.CDP_PORT || 9228);
 const baseUrl = process.env.APP_URL || 'http://127.0.0.1:5173/';
@@ -28,6 +32,7 @@ async function page(width, height, { reduced = false, noLocks = false } = {}) {
   c.touch = width < 1280;
   await viewport(c, width,height,c.touch);
   await c.send('Emulation.setEmulatedMedia', { features:[{name:'prefers-reduced-motion',value:reduced?'reduce':'no-preference'}] });
+  await c.send('Page.addScriptToEvaluateOnNewDocument', { source:`localStorage.setItem('focus-galaxy-priorities-v2', ${JSON.stringify(JSON.stringify(fixture))});` });
   if (noLocks) await c.send('Page.addScriptToEvaluateOnNewDocument', { source:`
     Object.defineProperty(navigator,'locks',{ configurable:true,value:undefined });
     window.qaWrites=[]; const set=Storage.prototype.setItem;
@@ -38,7 +43,7 @@ async function page(width, height, { reduced = false, noLocks = false } = {}) {
     HTMLAnchorElement.prototype.click=function(){window.qaNames.push(this.download);return anchor.call(this)};
   ` });
   await c.send('Page.navigate',{url:baseUrl});
-  await c.wait(`!!document.querySelector('.core-body') && document.querySelectorAll('.orb-screen-hit').length === 6`);
+  await c.wait(`!!document.querySelector('.core-body') && document.querySelectorAll('.orb-screen-hit').length === ${fixture.length}`);
   await c.evaluate('document.fonts.ready');
   await sleep(500);
   return c;
@@ -91,6 +96,7 @@ async function geometry(c,touch) {
   await key(c,'Escape');
   await c.wait(`!document.querySelector('.orb-screen-hit[aria-pressed="true"]')`);
   await key(c,'f','KeyF',70); await sleep(650);
+  const saved = await c.evaluate(`localStorage.getItem('focus-galaxy-priorities-v2')`);
   for(let cycle=0;cycle<3;cycle++) {
     const p = await target(c,'.core-container');
     await capture(`cycle-${cycle}-before-down`);
@@ -99,14 +105,18 @@ async function geometry(c,touch) {
     await screenshot(c,output,`geometry-${await c.evaluate('innerWidth+"x"+innerHeight')}-release`);
     const releasedMax = Math.max(...all.map(r=>Math.hypot(r.dx,r.dy)));
     assert.ok(releasedMax<=2,`Center displaced ${releasedMax.toFixed(3)} CSS px relative to orbital origin (limit 2)`);
-    await c.wait(`document.querySelector('[data-testid="orb-job-search"]')?.getAttribute('aria-pressed')==='true'`);
-    await capture(`cycle-${cycle}-panel-open`);
+    await c.wait(`!!document.querySelector('[data-testid="galaxy-genesis"]')`);
+    assert.ok(await c.evaluate(`!document.querySelector('.galaxy-viewport [data-testid="galaxy-genesis"]')`),'Genesis is portaled outside the scene');
+    assert.equal(await c.evaluate(`document.querySelector('.orb-screen-hit[aria-pressed="true"]')?.dataset.testid ?? null`),null,'Center opens Genesis without selecting a planet');
+    assert.equal(await c.evaluate(`localStorage.getItem('focus-galaxy-priorities-v2')`),saved,'Opening Genesis does not mutate priorities');
+    await capture(`cycle-${cycle}-genesis-open`);
     if(cycle===0) await screenshot(c,output,`geometry-${await c.evaluate('innerWidth+"x"+innerHeight')}-after-tap`);
     await sleep(550);
-    await click(c,'[aria-label="Close panel"]',touch);
-    await c.wait(`!document.querySelector('.orb-screen-hit[aria-pressed="true"]')`);
-    await capture(`cycle-${cycle}-panel-closed`);
-    await key(c,'f','KeyF',70); await sleep(650);
+    await click(c,'[aria-label="Close Galaxy Genesis"]',touch);
+    await c.wait(`!document.querySelector('[data-testid="galaxy-genesis"]') && document.activeElement===document.querySelector('.core-container')`);
+    assert.equal(await c.evaluate(`localStorage.getItem('focus-galaxy-priorities-v2')`),saved,'Closing Genesis does not mutate priorities');
+    assert.deepEqual(await c.evaluate(`[...document.querySelectorAll('.orb-screen-hit')].map(e=>e.dataset.testid).sort()`),fixture.map(priority=>`orb-${priority.id}`).sort(),'Preview preserves all rendered priorities');
+    await capture(`cycle-${cycle}-genesis-closed`);
     const planet = await c.evaluate(`(()=>{for(const e of document.querySelectorAll('.orb-screen-hit')){const r=e.getBoundingClientRect(),x=r.x+r.width/2,y=r.y+r.height/2;if(document.elementFromPoint(x,y)===e)return {selector:'[data-testid="'+e.dataset.testid+'"]',id:e.dataset.testid};}return null})()`);
     assert.ok(planet,'A visible planet must be available');
     await click(c,planet.selector,touch);
@@ -137,12 +147,20 @@ async function reset(c,touch) {
   if(touch && await c.evaluate(`document.querySelector('#mobile-galaxy-controls-trigger')?.getAttribute('aria-expanded')==='false'`)) {
     await click(c,'#mobile-galaxy-controls-trigger',true); await sleep(250);
   }
-  await click(c,'[aria-label="Reset priorities"]',touch);
-  await c.wait(`!!document.querySelector('.focus-confirm-destructive')`);
+  await click(c,'[aria-label="Explore galaxy templates"]',touch);
+  await c.wait(`!!document.querySelector('[data-testid="galaxy-genesis"]')`);
+  await settledPanel(c,'.genesis-portal');
+  const choice = '.genesis-choice[data-template="first-orbit"]';
+  await c.evaluate(`document.querySelector(${JSON.stringify(choice)}).scrollIntoView({block:'nearest'})`);
+  await settledPanel(c,choice);
+  await click(c,choice,touch);
+  await c.wait(`document.querySelector(${JSON.stringify(choice)})?.getAttribute('aria-pressed')==='true'`);
+  await click(c,'.genesis-apply',touch);
+  await c.wait(`!!document.querySelector('.genesis-confirm-apply')`);
   await settledPanel(c,'[role="alertdialog"]');
-  await click(c,'.focus-confirm-destructive',touch);
-  await c.wait(`document.querySelector('.focus-toast[data-state="open"]')?.innerText.includes('Galaxy Reset')`);
-  await c.wait(`!document.querySelector('[role="alertdialog"]') && !document.querySelector('body > [data-state="closed"].fixed.inset-0')`);
+  await click(c,'.genesis-confirm-apply',touch);
+  await c.wait(`document.querySelector('.focus-toast[data-state="open"]')?.innerText.includes('Your universe is ready')`);
+  await c.wait(`!document.querySelector('[data-testid="galaxy-genesis"]') && !document.querySelector('[role="alertdialog"]') && !document.querySelector('body > [data-state="closed"].fixed.inset-0')`);
   await settledPanel(c,'.focus-toast');
 }
 async function notifications(c,touch) {
@@ -162,7 +180,7 @@ async function notifications(c,touch) {
   assert.ok(snapshot.controls.every(e=>e.overlap===0),`Toast visually covers toolbar: ${JSON.stringify(snapshot.controls.filter(e=>e.overlap))}`);
   assert.ok(snapshot.controls.every(e=>e.reachable),'Toolbar hit targets must remain reachable');
   assert.ok(!snapshot.active?.includes('focus-toast'),'Success must not steal focus');
-  assert.ok(snapshot.live.some(e=>e.live==='polite' && e.text.includes('Galaxy Reset')),'Success is announced politely');
+  assert.ok(snapshot.live.some(e=>e.live==='polite' && e.text.includes('Your universe is ready')),'Success is announced politely');
   assert.ok(await c.evaluate(`getComputedStyle(document.querySelector('.focus-toast')).pointerEvents==='none' && getComputedStyle(document.querySelector('.focus-toast-viewport')).pointerEvents==='none'`),'Noninteractive notification areas pass pointer events through');
   // Exercise real mouse/touch actions and real keyboard activation while visible.
   await target(c,'[aria-label="Add priority"]');
@@ -241,8 +259,8 @@ async function warning(c,touch) {
 }
 async function panels(c,touch) {
   assert.equal(await c.evaluate(`document.querySelector('.focus-galaxy-app').classList.contains('mobile-ui-viewport')`),touch,'Use compact controls below 1280px instead of squeezing three cards');
-  await c.evaluate(`document.querySelector('[data-testid="orb-family"]').click()`);
-  await c.wait(`document.querySelector('#selected-priority-name')?.value==='Family' || document.querySelector('.mobile-sheet-name')?.textContent==='Family'`);
+  await c.evaluate(`document.querySelector('[data-testid="orb-${fixture[5].id}"]').click()`);
+  await c.wait(`document.querySelector('#selected-priority-name')?.value===${JSON.stringify(fixture[5].name)} || document.querySelector('.mobile-sheet-name')?.textContent===${JSON.stringify(fixture[5].name)}`);
   await settledPanel(c,'.selected-panel-card');
   if(touch) {
     await click(c,'.mobile-sheet-handle',true);

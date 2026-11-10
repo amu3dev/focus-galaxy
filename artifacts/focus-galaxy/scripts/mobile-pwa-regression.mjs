@@ -3,6 +3,9 @@ import http from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { CDP, viewport, click } from './cdp-harness.mjs';
+import { galaxyTemplates, instantiateTemplate } from '../src/lib/galaxy-templates.ts';
+
+const fixture = instantiateTemplate(galaxyTemplates.find(template => template.id === 'full-galaxy'));
 
 const port = Number(process.env.CDP_PORT || 9228);
 const baseUrl = process.env.APP_URL || 'http://127.0.0.1:5173/';
@@ -136,6 +139,7 @@ async function main() {
 
     await c.send('Page.addScriptToEvaluateOnNewDocument', {
       source: `
+        localStorage.setItem('focus-galaxy-priorities-v2', ${JSON.stringify(JSON.stringify(fixture))});
         window.__ENABLE_SW__ = true;
         window.__persistCalled = 0;
         if (navigator.storage) {
@@ -152,7 +156,7 @@ async function main() {
     });
 
     await c.send('Page.navigate', { url: baseUrl });
-    await c.wait(`!!document.querySelector('.core-body') && document.querySelectorAll('.orb-screen-hit').length === 6`);
+    await c.wait(`!!document.querySelector('.core-body') && document.querySelectorAll('.orb-screen-hit').length === ${fixture.length}`);
 
     // 1. Verify PWA meta tags, manifest, and PNG icons
     const pwaCheck = await c.evaluate(`(async () => {
@@ -290,7 +294,9 @@ async function main() {
 
     // Case 5: Fresh installation online on Version A (Build 1)
     await p1.send('Page.navigate', { url: prodServer.url });
-    await p1.wait(`!!document.querySelector('.core-body') && document.querySelectorAll('.orb-screen-hit').length === 6`);
+    await p1.wait(`!!document.querySelector('.core-body') && !!document.querySelector('.genesis-empty') && document.querySelectorAll('.orb-screen-hit').length === 0`);
+    await p1.wait(`localStorage.getItem('focus-galaxy-priorities-v2') === '[]'`);
+    assert.equal(await p1.evaluate(`document.querySelector('.genesis-empty').getAttribute('aria-label')`), 'Your Blank Universe', 'Fresh PWA starts with Blank Universe');
     await p1.wait(`(async () => {
       const reg = await navigator.serviceWorker.getRegistration('/');
       return Boolean(reg?.active) && Boolean(navigator.serviceWorker.controller);
@@ -325,7 +331,7 @@ async function main() {
     // Case 6: Cut server connectivity completely and open in a fresh tab + reload offline
     prodServer.setOnline(false);
     await p1.send('Page.reload');
-    await p1.wait(`!!document.querySelector('.core-body') && document.querySelectorAll('.orb-screen-hit').length === 7`);
+    await p1.wait(`!!document.querySelector('.core-body') && document.querySelectorAll('.orb-screen-hit').length === 1`);
     const { targetId: tab2Id } = await browser.send('Target.createTarget', { url: 'about:blank', browserContextId: prodCtx });
     const targets2 = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
     p2 = await CDP.connect(targets2.find((t) => t.id === tab2Id).webSocketDebuggerUrl);
@@ -333,10 +339,10 @@ async function main() {
     await p2.send('Page.enable');
     await viewport(p2, 390, 844, true);
     await p2.send('Page.navigate', { url: prodServer.url });
-    await p2.wait(`!!document.querySelector('.core-body') && document.querySelectorAll('.orb-screen-hit').length === 7`);
+    await p2.wait(`!!document.querySelector('.core-body') && document.querySelectorAll('.orb-screen-hit').length === 1`);
     const offlineHasPriority = await p2.evaluate(`(localStorage.getItem('focus-galaxy-priorities-v2') || '').includes('Offline PWA Priority')`);
     assert.ok(offlineHasPriority, 'Offline reload preserves saved priorities');
-    recordCase('prod-fresh-install-reopen-offline', { orbCount: 7, savedPriority: true });
+    recordCase('prod-fresh-install-reopen-offline', { orbCount: 1, savedPriority: true });
 
     // Case 7: Restore online connectivity and verify no conflict or corruption
     prodServer.setOnline(true);
@@ -399,7 +405,7 @@ async function main() {
     prodServer.setOnline(false);
     p1.errors = [];
     await p1.send('Page.reload');
-    await p1.wait(`!!document.querySelector('.core-body') && document.querySelectorAll('.orb-screen-hit').length === 7`);
+    await p1.wait(`!!document.querySelector('.core-body') && document.querySelectorAll('.orb-screen-hit').length === 1`);
     const p1AfterInterruptedReload = await p1.evaluate(`({
       buildVersion: window.__PWA_BUILD_VERSION__ ?? 1,
       scriptSrc: document.querySelector('script[type="module"]')?.getAttribute('src'),
@@ -421,7 +427,7 @@ async function main() {
     await p3.send('Page.enable');
     await viewport(p3, 390, 844, true);
     await p3.send('Page.navigate', { url: prodServer.url });
-    await p3.wait(`!!document.querySelector('.core-body') && document.querySelectorAll('.orb-screen-hit').length === 7`);
+    await p3.wait(`!!document.querySelector('.core-body') && document.querySelectorAll('.orb-screen-hit').length === 1`);
     const p3OfflineOpen = await p3.evaluate(`({
       buildVersion: window.__PWA_BUILD_VERSION__ ?? 1,
       scriptSrc: document.querySelector('script[type="module"]')?.getAttribute('src'),
@@ -473,15 +479,15 @@ async function main() {
 
     // Case 12: Reload into Version B online and offline, verifying updated bundle + preserved saved priorities
     await p2.send('Page.reload');
-    await p2.wait(`window.__PWA_BUILD_VERSION__ === 2 && document.querySelectorAll('.orb-screen-hit').length === 7`);
+    await p2.wait(`window.__PWA_BUILD_VERSION__ === 2 && document.querySelectorAll('.orb-screen-hit').length === 1`);
     prodServer.setOnline(false);
     await p2.send('Page.reload');
-    await p2.wait(`window.__PWA_BUILD_VERSION__ === 2 && document.querySelectorAll('.orb-screen-hit').length === 7`);
+    await p2.wait(`window.__PWA_BUILD_VERSION__ === 2 && document.querySelectorAll('.orb-screen-hit').length === 1`);
     const postUpdatePriority = await p2.evaluate(`(localStorage.getItem('focus-galaxy-priorities-v2') || '').includes('Offline PWA Priority')`);
     assert.equal(postUpdatePriority, true, 'Saved priorities preserved after Version B update and offline reload');
     recordCase('prod-complete-update-online-and-offline-with-priorities', {
       buildVersion: 2,
-      orbCount: 7,
+      orbCount: 1,
       savedPriorityPreserved: postUpdatePriority,
     });
 
