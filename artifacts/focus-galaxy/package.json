@@ -10,6 +10,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:galaxy-templates": "node scripts/galaxy-template-data-regression.mjs && node scripts/orbit-layout-regression.mjs && node scripts/galaxy-genesis-blockers-regression.mjs",
     "test:galaxy-genesis": "node scripts/galaxy-genesis-regression.mjs",
+    "test:cosmic-data": "node scripts/cosmic-appearance-data-regression.mjs",
+    "test:cosmic-personalization": "node scripts/cosmic-personalization-regression.mjs",
     "test:planet-interaction": "node scripts/planet-interaction-regression.mjs",
     "test:planet-orbital": "node scripts/planet-orbital-regression.mjs",
     "test:planet-storage-content": "node scripts/planet-storage-content-regression.mjs",

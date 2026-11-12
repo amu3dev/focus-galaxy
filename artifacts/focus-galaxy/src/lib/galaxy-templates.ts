@@ -1,5 +1,6 @@
 import type { PlanetEntry } from '../components/planet-content-composer';
 import { createId } from './utils.ts';
+import { taskAppearances, noteAppearances } from './cosmic-appearance.ts';
 
 export type Priority = {
   id: string;
@@ -206,11 +207,14 @@ export const galaxyTemplates: readonly GalaxyTemplate[] = [
 
 export function instantiateTemplate(template: GalaxyTemplate): Priority[] {
   const now = Date.now();
+  const appearanceIndex = { task: 0, note: 0 };
   return template.priorities.map(({ entries = [], ...priority }) => ({
     ...priority,
     id: createId(),
     entries: entries.map((entry): PlanetEntry => {
-      const fields = { id: createId(), type: entry.type, text: entry.text, createdAt: now, updatedAt: now };
+      const collection = entry.type === 'task' ? taskAppearances : noteAppearances;
+      const appearance = collection[appearanceIndex[entry.type]++ % collection.length].id;
+      const fields = { id: createId(), type: entry.type, text: entry.text, appearance, createdAt: now, updatedAt: now };
       return entry.type === 'task'
         ? { ...fields, type: 'task', completed: entry.completed ?? false }
         : { ...fields, type: 'note' };

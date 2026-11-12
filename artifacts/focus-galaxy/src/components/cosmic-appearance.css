@@ -1,0 +1,237 @@
+.cosmic-customize-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #a389c35c;
+  border-radius: 12px;
+  background: #21172e;
+  color: #eee3ff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.cosmic-customize-trigger svg { flex-shrink: 0; }
+.cosmic-customize-trigger:hover { background: #342343; border-color: #bd9cdf; }
+.cosmic-customize-trigger--compact {
+  position: relative;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+}
+.cosmic-customize-trigger--compact > .orb-planet {
+  width: 30px;
+  height: 30px;
+  box-shadow: inset -3px -4px 8px #0009, inset 2px 2px 5px #fff6, 0 4px 10px #0006;
+}
+.cosmic-customize-trigger--compact > .orb-planet::after { inset: 0; box-shadow: none; }
+.cosmic-trigger-badge {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  padding: 2px;
+  border: 1px solid #a389c3;
+  border-radius: 50%;
+  background: #21172e;
+  color: #eee3ff;
+}
+.cosmic-customize-trigger:focus-visible,
+.cosmic-dialog button:focus-visible {
+  outline: 2px solid #ebceff;
+  outline-offset: 3px;
+}
+
+.cosmic-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  background: #03020ad1;
+}
+.cosmic-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 111;
+  display: flex;
+  flex-direction: column;
+  width: min(540px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  overflow: hidden;
+  transform: translate(-50%, -50%);
+  border: 1px solid #79618e;
+  border-radius: 22px;
+  background: #100c1c;
+  color: #f6efff;
+  font-family: var(--font-sans);
+  box-shadow: 0 28px 80px #0009;
+  color-scheme: dark;
+}
+.cosmic-dialog ::selection { background: #8054a9; color: #fff; }
+.cosmic-dialog button { font: inherit; cursor: pointer; touch-action: manipulation; }
+.cosmic-dialog-header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 22px 18px 16px 24px;
+  border-bottom: 1px solid #a389c330;
+}
+.cosmic-dialog-header > div { flex: 1; min-width: 0; }
+.cosmic-dialog-title {
+  margin: 0;
+  color: #f6efff;
+  font-family: var(--font-display);
+  font-size: 23px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+.cosmic-dialog-description {
+  margin: 8px 0 0;
+  color: #c7b8db;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.cosmic-dialog .cosmic-dialog-close {
+  display: grid;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  margin: -7px 0 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: #d9c9ec;
+}
+.cosmic-dialog .cosmic-dialog-close:hover { background: #2b203b; color: #fff; }
+.cosmic-dialog-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #8e6cac #100c1c;
+  padding: 20px 24px 24px;
+  scroll-padding-block: 12px;
+}
+.cosmic-draft-preview {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-height: 112px;
+  margin-bottom: 22px;
+}
+.cosmic-color-preview { min-height: 148px; }
+.cosmic-draft-copy { min-width: 0; }
+.cosmic-draft-label {
+  display: block;
+  margin-bottom: 5px;
+  color: #c7b8db;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.cosmic-draft-copy strong {
+  display: block;
+  color: #f6efff;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.cosmic-draft-copy p { margin: 7px 0 0; color: #c7b8db; font-size: 12px; line-height: 1.6; }
+.cosmic-planet-preview {
+  display: grid;
+  flex: 0 0 144px;
+  width: 144px;
+  height: 144px;
+  place-items: center;
+}
+.cosmic-planet-preview > .orb-planet { width: 112px; height: 112px; }
+.cosmic-object-preview { display: block; flex: 0 0 96px; width: 96px; height: 96px; }
+.cosmic-choices { min-width: 0; margin: 0; padding: 0; border: 0; }
+.cosmic-choices-title { margin-bottom: 12px; padding: 0; color: #e8dbf7; font-size: 13px; font-weight: 600; }
+.cosmic-color-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.cosmic-object-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.cosmic-dialog .cosmic-color-choice,
+.cosmic-dialog .cosmic-object-choice {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 56px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #635073;
+  border-radius: 12px;
+  background: #191223;
+  color: #ebdff9;
+}
+.cosmic-dialog .cosmic-color-choice { padding: 10px; }
+.cosmic-color-swatch { width: 30px; height: 30px; flex-shrink: 0; border: 1px solid #ffffff80; border-radius: 50%; }
+.cosmic-dialog .cosmic-object-choice { flex-direction: column; gap: 6px; padding: 12px 6px 10px; }
+.cosmic-object-thumbnail { display: block; width: 52px; height: 52px; }
+.cosmic-object-choice > span { font-size: 11px; font-weight: 500; line-height: 1.45; text-align: center; overflow-wrap: anywhere; }
+.cosmic-dialog .cosmic-color-choice:hover,
+.cosmic-dialog .cosmic-object-choice:hover { border-color: #c4a2e2; background: #261b35; }
+.cosmic-dialog .cosmic-color-choice[aria-pressed="true"],
+.cosmic-dialog .cosmic-object-choice[aria-pressed="true"] { border-color: #d0acf5; background: #352146; box-shadow: inset 0 0 0 1px #d0acf5; }
+.cosmic-choice-check {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 2px;
+  border-radius: 50%;
+  background: #523271;
+  color: #fff;
+}
+.cosmic-dialog-footer {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid #a389c330;
+  background: #161020;
+}
+.cosmic-dialog .cosmic-dialog-cancel,
+.cosmic-dialog .cosmic-dialog-save {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid #9d80bb;
+  border-radius: 11px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.cosmic-dialog .cosmic-dialog-cancel { background: #241a32; color: #eee3ff; }
+.cosmic-dialog .cosmic-dialog-cancel:hover { background: #352344; }
+.cosmic-dialog .cosmic-dialog-save { border-color: #a36ed5; background: #75429f; color: #fff; }
+.cosmic-dialog .cosmic-dialog-save:hover { background: #8652af; }
+
+@media (max-width: 440px) {
+  .cosmic-dialog { border-radius: 18px; }
+  .cosmic-dialog-header { padding: 18px 12px 14px 16px; gap: 6px; }
+  .cosmic-dialog-title { font-size: 21px; }
+  .cosmic-dialog-body { padding: 16px 16px 20px; }
+  .cosmic-draft-preview { gap: 14px; margin-bottom: 20px; }
+  .cosmic-color-preview { min-height: 130px; }
+  .cosmic-planet-preview { flex-basis: 114px; width: 114px; height: 130px; }
+  .cosmic-planet-preview > .orb-planet { width: 90px; height: 90px; }
+  .cosmic-object-preview { flex-basis: 76px; width: 76px; height: 76px; }
+  .cosmic-draft-copy strong { font-size: 18px; }
+  .cosmic-color-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .cosmic-object-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cosmic-object-choice > span { font-size: 12px; }
+  .cosmic-dialog-footer { padding: 14px 16px; gap: 8px; }
+}

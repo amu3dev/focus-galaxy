@@ -38,6 +38,8 @@ import type { PlanetEntry, PlanetEntryType } from '@/components/planet-content-c
 import { GalaxyGenesis } from '@/components/galaxy-genesis';
 import { instantiateTemplate, type GalaxyTemplate, type Priority } from '@/lib/galaxy-templates';
 import { initialOrbitAngles } from '@/lib/orbit-layout';
+import { nextAppearance, planetColors, resolveAppearance, type CelestialAppearance } from '@/lib/cosmic-appearance';
+import { PlanetColorStudio } from '@/components/cosmic-appearance-picker';
 
 type MetricKey = 'importance' | 'urgency' | 'energy';
 
@@ -1283,6 +1285,7 @@ function InsightPanel({ insight, title, priority, presentation = 'desktop' }: { 
 function SelectedPanel({
   priority,
   onUpdate,
+  onColorChange,
   onRename,
   onComplete,
   onClose,
@@ -1295,6 +1298,7 @@ function SelectedPanel({
 }: {
   priority?: Priority;
   onUpdate: (metric: MetricKey, val: number) => void;
+  onColorChange: (hue: string) => void;
   onRename: (name: string) => void;
   onComplete: () => void;
   onClose: () => void;
@@ -1381,9 +1385,7 @@ function SelectedPanel({
 
       <div className="selected-panel-header flex justify-between items-start mb-3">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full shadow-[0_0_20px_var(--c)] relative shrink-0" style={{ '--c': priority.hue, background: `radial-gradient(circle at 35% 35%, #fff 0%, ${priority.hue} 50%, #000 90%)` } as any}>
-            <div className="absolute inset-0 rounded-full shadow-[inset_0_0_10px_rgba(255,255,255,0.5)] pointer-events-none"></div>
-          </div>
+          <PlanetColorStudio key={priority.id} hue={priority.hue} onSave={onColorChange} compact />
           <div className="flex flex-col justify-center min-w-0">
             {isMobile && !isExpanded ? (
               <button
@@ -2239,7 +2241,19 @@ function FocusGalaxyContainer() {
       ? { id: createId(), type, text, createdAt: now, updatedAt: now }
       : { id: createId(), type, text, completed: false, createdAt: now, updatedAt: now };
     setPriorities(prev => prev.map(priority => priority.id === id
-      ? { ...priority, entries: [...(priority.entries ?? []), entry] }
+      ? { ...priority, entries: [...(priority.entries ?? []), { ...entry, appearance: nextAppearance(type, priority.entries ?? [], entry.id) }] }
+      : priority));
+  };
+
+  const savePlanetColor = (id: string, hue: string) => {
+    if (!planetColors.some(color => color.hue === hue)) return;
+    setPriorities(prev => prev.map(priority => priority.id === id ? { ...priority, hue } : priority));
+  };
+
+  const savePlanetAppearance = (priorityId: string, entryId: string, appearance: CelestialAppearance) => {
+    setPriorities(prev => prev.map(priority => priority.id === priorityId
+      ? { ...priority, entries: (priority.entries ?? []).map(entry => entry.id === entryId
+          ? { ...entry, appearance: resolveAppearance(entry.type, appearance) } : entry) }
       : priority));
   };
 
@@ -2361,9 +2375,10 @@ function FocusGalaxyContainer() {
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
       const target = e.target instanceof HTMLElement ? e.target : null;
       if (isAddOpen || isManageOpen || isGenesisOpen || confirmation || isMobileMenuOpen || isPlanetFocusOpen) return;
-      if (target?.closest('[role="tablist"], [role="dialog"], [role="alertdialog"]')) return;
+      if (document.querySelector('[data-cosmic-dialog]') || target?.closest('[role="tablist"], [role="dialog"], [role="alertdialog"]')) return;
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName ?? '')) return;
       if (e.key === 'Escape') {
         setSelectedId(null);
@@ -2792,6 +2807,7 @@ function FocusGalaxyContainer() {
                 <SelectedPanel
                   priority={selectedPriority}
                   onUpdate={(metric, val) => updatePriority(selectedPriority.id, metric, val)}
+                  onColorChange={hue => savePlanetColor(selectedPriority.id, hue)}
                   onRename={(name) => renamePriority(selectedPriority.id, name)}
                   onEnterFocus={(opener) => enterPlanetFocus(selectedPriority.id, opener)}
                   onComplete={() => completePriority(selectedPriority.id)}
@@ -2859,6 +2875,8 @@ function FocusGalaxyContainer() {
           prefersReducedMotion={prefersReducedMotion}
           onCreateEntry={(type, text) => createPlanetEntry(focusPriority.id, type, text)}
           onSaveEntry={(entryId, text) => savePlanetEntry(focusPriority.id, entryId, text)}
+          onSaveColor={hue => savePlanetColor(focusPriority.id, hue)}
+          onSaveAppearance={(entryId, appearance) => savePlanetAppearance(focusPriority.id, entryId, appearance)}
           onToggleTask={(entryId) => togglePlanetTask(focusPriority.id, entryId)}
           onDeleteEntry={(entryId) => deletePlanetEntry(focusPriority.id, entryId)}
           onClose={() => {

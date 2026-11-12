@@ -2381,16 +2381,9 @@ input[type=range]::-moz-range-thumb {
   color: #fff; cursor: pointer; touch-action: manipulation;
 }
 .planet-orbit-body { position: relative; display: grid; width: 32px; height: 32px; place-items: center; }
-.planet-orbit-moon {
-  display: block; width: 28px; height: 28px; border-radius: 50%;
-  background: radial-gradient(circle at 31% 29%, #f0f3ff, #93a3c2 37%, #37445e 73%, #10192c);
-  box-shadow: inset -3px -3px 6px rgba(0,0,0,0.6), 0 4px 9px rgba(0,0,0,0.4);
-}
-.planet-orbit-moon::before, .planet-orbit-moon::after { content: ''; position: absolute; width: 6px; height: 5px; left: 10px; top: 9px; border-radius: 50%; background: rgba(29,43,70,0.4); box-shadow: inset 1px 1px 2px rgba(0,0,0,0.45); }
-.planet-orbit-moon::after { width: 4px; height: 4px; left: 18px; top: 19px; }
-.planet-orbit-object[data-kind="note"] .planet-orbit-body { color: color-mix(in srgb, var(--planet-focus-hue) 35%, #b9f5ff); }
-.planet-orbit-object[data-kind="note"] svg { fill: color-mix(in srgb, var(--planet-focus-hue) 38%, #1d284b); filter: drop-shadow(0 3px 6px rgba(98,175,240,0.3)); }
-.planet-orbit-object[data-completed="true"] .planet-orbit-moon { opacity: 0.55; }
+.planet-orbit-body > .celestial-object { width: 34px; height: 34px; overflow: visible; pointer-events: none; }
+.planet-orbit-object[data-completed="true"] .celestial-object { opacity: 0.55; }
+.planet-orbit-object[data-kind="note"][aria-pressed="true"] { outline: 1px dashed #c8eaff; outline-offset: 2px; }
 .planet-orbit-complete { position: absolute; right: -2px; bottom: -1px; padding: 1px; border-radius: 50%; background: #153d35; color: #b4f5d1; }
 .planet-orbit-object:hover, .planet-orbit-object[aria-pressed="true"] { background: color-mix(in srgb, var(--planet-focus-hue) 17%, transparent); }
 .planet-orbit-label {

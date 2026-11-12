@@ -2,6 +2,9 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Check, ChevronLeft, ChevronRight, Gem, ListTodo, Pause, Play, X } from 'lucide-react';
 import { motion, useMotionValue, useTransform, type MotionValue } from 'framer-motion';
 import type { PlanetEntry } from './planet-content-composer';
+import { CelestialObject } from './celestial-object';
+import { CelestialAppearancePicker } from './cosmic-appearance-picker';
+import type { CelestialAppearance } from '@/lib/cosmic-appearance';
 
 const GROUP_SIZE = 6;
 
@@ -22,6 +25,10 @@ function OrbitalObject({ entry, index, count, phase, size, selected, onSelect, o
   const x = useTransform(position, p => p.x);
   const y = useTransform(position, p => p.y);
   const scale = useTransform(position, p => p.depth);
+  // Tiny attitude changes reuse the orbital clock, including all pause safeguards.
+  const rotate = useTransform(phase, value =>
+    entry.appearance === 'satellite' || entry.appearance === 'explorer-probe' || entry.appearance === 'ringed-moon'
+      ? Math.sin(value * 2 + index) * 8 : 0);
   const completed = entry.type === 'task' && entry.completed;
   return (
     <motion.button type="button" className="planet-orbit-object" style={{ x, y }}
@@ -31,8 +38,8 @@ function OrbitalObject({ entry, index, count, phase, size, selected, onSelect, o
       onPointerEnter={e => { if (e.pointerType === 'mouse') onHover(true); }}
       onPointerLeave={e => { if (e.pointerType === 'mouse') onHover(false); }}
       onFocus={() => onFocusChange(true)} onBlur={() => onFocusChange(false)}>
-      <motion.span className="planet-orbit-body" style={{ scale }} aria-hidden="true">
-        {entry.type === 'note' ? <Gem size={29} strokeWidth={1.3} /> : <span className="planet-orbit-moon" />}
+      <motion.span className="planet-orbit-body" style={{ scale, rotate }} aria-hidden="true">
+        <CelestialObject type={entry.type} appearance={entry.appearance} />
         {completed && <Check className="planet-orbit-complete" size={14} strokeWidth={3} />}
       </motion.span>
       <span className="planet-orbit-label" aria-hidden="true">{entry.text}</span>
@@ -40,9 +47,10 @@ function OrbitalObject({ entry, index, count, phase, size, selected, onSelect, o
   );
 }
 
-export function PlanetOrbitalSystem({ entries, prefersReducedMotion, onToggleTask, onRevealEntry, children }: {
+export function PlanetOrbitalSystem({ entries, prefersReducedMotion, onToggleTask, onRevealEntry, onSaveAppearance, children }: {
   entries: PlanetEntry[]; prefersReducedMotion: boolean; onToggleTask: (id: string) => void;
   onRevealEntry: (id: string) => void; children: ReactNode;
+  onSaveAppearance: (id: string, appearance: CelestialAppearance) => void;
 }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const phase = useMotionValue(0);
@@ -136,7 +144,7 @@ export function PlanetOrbitalSystem({ entries, prefersReducedMotion, onToggleTas
       </nav>}
       {selected ? <section id="planet-orbit-preview" className="planet-orbit-preview" data-entry-id={selected.id} aria-label={`Selected ${selected.type}`}>
         <div className="planet-orbit-preview-heading">
-          <span>{selected.type === 'note' ? 'Note fragment' : selected.completed ? 'Completed task' : 'Task moon'} · orbit paused</span>
+          <span>{selected.type === 'note' ? 'Note' : selected.completed ? 'Completed task' : 'Task'} · orbit paused</span>
           <button type="button" aria-label="Close orbital preview" onClick={closePreview}><X size={16} aria-hidden="true" /></button>
         </div>
         <p tabIndex={0}>{selected.text}</p>
@@ -145,8 +153,10 @@ export function PlanetOrbitalSystem({ entries, prefersReducedMotion, onToggleTas
             <Check size={14} aria-hidden="true" />{selected.completed ? 'Reopen task' : 'Complete task'}
           </button>}
           <button type="button" className="planet-orbit-open-editor" onClick={() => onRevealEntry(selected.id)}>Open in content list</button>
+          <CelestialAppearancePicker key={selected.id} type={selected.type} appearance={selected.appearance}
+            onSave={appearance => onSaveAppearance(selected.id, appearance)} />
         </div>
-      </section> : <p className="planet-orbit-hint">{entries.length ? 'Select a moon or fragment to explore. Motion pauses while you interact.' : 'Add a task or note below to establish its orbit.'}</p>}
+      </section> : <p className="planet-orbit-hint">{entries.length ? 'Select an object to explore or customize. Motion pauses while you interact.' : 'Add a task or note below to establish its orbit.'}</p>}
     </div>
   );
 }

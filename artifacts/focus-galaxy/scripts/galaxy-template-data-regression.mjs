@@ -63,6 +63,9 @@ for (const [index, template] of galaxyTemplates.entries()) {
     const entries = result.flatMap(priority => priority.entries ?? []);
     assert.equal(entries.filter(entry => entry.type === 'task').length, tasks);
     assert.equal(entries.filter(entry => entry.type === 'note').length, notes);
+    assert.ok(entries.every(entry => typeof entry.appearance === 'string'), 'new template entries have saved cosmic identities');
+    const again = instantiateTemplate(template).flatMap(priority => priority.entries ?? []);
+    assert.deepEqual(again.map(entry => entry.appearance), entries.map(entry => entry.appearance), 'template identities are stable across creation runs');
     for (const [priorityIndex, priority] of result.entries()) {
       const seed = template.priorities[priorityIndex];
       freshReference(priority);
@@ -97,6 +100,8 @@ for (const [index, template] of galaxyTemplates.entries()) {
     }
     assert.deepEqual(result, stable, 'IDs and timestamps are stable after creation');
     if (id === 'full-galaxy') {
+      assert.ok(new Set(entries.filter(entry => entry.type === 'task').map(entry => entry.appearance)).size >= 6);
+      assert.ok(new Set(entries.filter(entry => entry.type === 'note').map(entry => entry.appearance)).size >= 4);
       assert.ok(result.every(priority => priority.entries.length > 0));
       for (const metric of ['importance', 'urgency', 'energy']) assert.ok(new Set(result.map(priority => priority[metric])).size >= 3);
       const taskEntries = entries.filter(entry => entry.type === 'task');

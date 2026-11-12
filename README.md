@@ -80,6 +80,45 @@ suite includes a 130-second orbital observation.
 selection, completion and editing persistence, motion/pause and reduced motion,
 grouped browsing, and clean Level 1 restoration. It uses disposable contexts.
 
+## Cosmic Personalization
+
+Select a planet's small portrait in the priority editor, or **Customize planet
+color** inside Level 2, to open **Planet Color Studio**. Twelve curated colors
+preview with the existing dimensional lighting. **Save color** retains the
+choice; Cancel or Escape leaves the saved planet unchanged. Importance, urgency,
+energy, geometry, and Focus Score are independent of appearance.
+
+Select an orbiting task or note, then **Customize appearance**, to open its
+**Celestial Object Library**. Tasks have ten physical moon/spacecraft designs;
+notes have ten crystal/energy artifact designs. Each collection shows thumbnails,
+selection marks, and a live draft preview. **Save appearance** applies the choice.
+Task completion remains a separate check badge and a labeled completion action.
+
+Appearance is an optional stable identifier on an entry; planet color reuses
+`hue`. Missing, unknown, or wrong-category identifiers render as the familiar
+Lunar Moon or Crystal Shard without rewriting the stored entry. New items choose
+among the least-used designs in their planet's collection, avoiding the previous
+same-category design when possible; item identity breaks ties deterministically.
+The assigned identifier is saved once, not randomized while rendering.
+
+Genesis assigns designs in catalog order within each collection when creating a
+new template galaxy. This makes Full Galaxy varied immediately, while First Orbit
+stays small and Blank Universe stays empty. No existing galaxy is re-seeded.
+Cosmetic edits use the same state and Web-Lock/revision-protected persistence as
+content edits; session exports and Genesis recovery copies retain appearance.
+
+```bash
+pnpm --filter @workspace/focus-galaxy run test:cosmic-data
+APP_URL=http://127.0.0.1:5173/ CDP_PORT=9228 \
+  pnpm --filter @workspace/focus-galaxy run test:cosmic-personalization
+```
+
+The first check covers the catalog, defaults, variety, and all twenty rendered
+SVGs. The browser check uses disposable contexts for staged color/appearance
+edits, reloads, completion, legacy values, 320px touch and focus handling,
+automatic variety, cross-tab conflicts, and Full Galaxy. It writes screenshots
+and `results.json` to `QA_OUTPUT_DIR` (or a temporary directory).
+
 ## Galaxy Genesis
 
 Select **YOU / NOW** (or **Galaxy templates** in the mobile controls) to preview

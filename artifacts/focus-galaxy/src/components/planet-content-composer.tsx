@@ -1,8 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { Check, ChevronDown, Circle, FileText, ListTodo, Pencil, Save, Trash2, X } from 'lucide-react';
+import type { CelestialAppearance } from '@/lib/cosmic-appearance';
 
 export type PlanetNoteEntry = {
   id: string;
+  appearance?: CelestialAppearance;
   type: 'note';
   text: string;
   createdAt: number;
@@ -11,6 +13,7 @@ export type PlanetNoteEntry = {
 
 export type PlanetTaskEntry = {
   id: string;
+  appearance?: CelestialAppearance;
   type: 'task';
   text: string;
   completed: boolean;
@@ -149,7 +152,7 @@ export function PlanetContentComposer({
     if (!pendingDeletion) return;
     deleteCancelRef.current?.focus();
     const cancelOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape' || event.defaultPrevented || document.querySelector('[data-cosmic-dialog]')) return;
       event.preventDefault();
       // Run before Focus mode's window listener so Escape cancels this action
       // even after the user tabs outside the composer.

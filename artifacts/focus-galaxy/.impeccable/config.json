@@ -19,7 +19,7 @@
           "src/index.css"
         ],
         "createdAt": "2026-11-09T10:36:11.287Z",
-        "reason": "Agent: existing --font-sans product body font is unchanged; typography replacement is outside the responsive fix"
+        "reason": "Agent: font is already present at baseline c46d3e4; the Cosmic Personalization brief explicitly preserves the established design system"
       },
       {
         "rule": "bounce-easing",

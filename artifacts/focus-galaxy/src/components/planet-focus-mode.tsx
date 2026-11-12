@@ -3,6 +3,8 @@ import { ArrowLeft } from 'lucide-react';
 import { motion, useAnimationControls } from 'framer-motion';
 import { PlanetContentComposer, type PlanetEntry, type PlanetEntryType } from '@/components/planet-content-composer';
 import { PlanetOrbitalSystem } from '@/components/planet-orbital-system';
+import { PlanetColorStudio } from '@/components/cosmic-appearance-picker';
+import type { CelestialAppearance } from '@/lib/cosmic-appearance';
 
 export type PlanetFocusPriority = {
   id: string;
@@ -33,6 +35,8 @@ type PlanetFocusModeProps = {
   prefersReducedMotion: boolean;
   onCreateEntry: (type: PlanetEntryType, text: string) => void;
   onSaveEntry: (id: string, text: string) => void;
+  onSaveColor: (hue: string) => void;
+  onSaveAppearance: (id: string, appearance: CelestialAppearance) => void;
   onToggleTask: (id: string) => void;
   onDeleteEntry: (id: string) => void;
   onClose: () => void;
@@ -51,6 +55,8 @@ export function PlanetFocusMode({
   prefersReducedMotion,
   onCreateEntry,
   onSaveEntry,
+  onSaveColor,
+  onSaveAppearance,
   onToggleTask,
   onDeleteEntry,
   onClose,
@@ -123,8 +129,8 @@ export function PlanetFocusMode({
     )).filter((element) => element.getClientRects().length > 0);
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      // A storage-conflict reload confirmation owns focus until it closes.
-      if (document.querySelector('[role="alertdialog"]')) return;
+      // Radix may unmount a nested dialog before this window listener runs.
+      if (event.defaultPrevented || document.querySelector('[role="alertdialog"], [data-cosmic-dialog]')) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
@@ -293,7 +299,7 @@ export function PlanetFocusMode({
         <section className="planet-focus-hero" aria-label={`${priority.name} planet`}>
           <div className="planet-focus-starfield" aria-hidden="true" />
           <PlanetOrbitalSystem entries={priority.entries ?? []} prefersReducedMotion={prefersReducedMotion}
-            onToggleTask={onToggleTask} onRevealEntry={id => setRevealEntry({ id })}>
+            onToggleTask={onToggleTask} onSaveAppearance={onSaveAppearance} onRevealEntry={id => setRevealEntry({ id })}>
           <div className="planet-focus-orb-target" ref={heroRef}>
             <motion.div className="planet-focus-orb-flight" animate={planetAnimation}>
               <div className="planet-focus-orb-art selected" style={{ '--orb-color': priority.hue } as CSSProperties}>
@@ -319,6 +325,8 @@ export function PlanetFocusMode({
               </div>
             </div>
           </header>
+
+          <PlanetColorStudio hue={priority.hue} onSave={onSaveColor} />
 
           <section className="planet-focus-signals" aria-label="Priority signals">
             {metrics.map(({ label, value }) => (
