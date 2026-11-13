@@ -1249,6 +1249,22 @@ function getGalaxyFocusTarget(excludedId?: string) {
     && getComputedStyle(element).visibility !== 'hidden');
 }
 
+function CreatorAttribution() {
+  return (
+    <footer className="relative z-10 mt-4 shrink-0 border-t border-white/10 pt-3 text-center font-sans text-[11px] leading-relaxed text-white/60">
+      Crafted by{' '}
+      <a
+        href="https://www.linkedin.com/in/amyosry/"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex min-h-6 items-center rounded-sm font-medium text-white/75 underline decoration-white/25 underline-offset-4 transition-colors hover:text-white hover:decoration-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
+      >
+        Ahmed Yosry<span className="sr-only"> on LinkedIn (opens in a new tab)</span>
+      </a>
+    </footer>
+  );
+}
+
 function InsightPanel({ insight, title, priority, presentation = 'desktop' }: { insight: string, title: string, priority?: Priority, presentation?: 'desktop' | 'mobile' }) {
   const color = priority?.hue || '#9b5be4';
   const isMobilePresentation = presentation === 'mobile';
@@ -1277,6 +1293,7 @@ function InsightPanel({ insight, title, priority, presentation = 'desktop' }: { 
       <p className="text-[13px] text-white/60 leading-relaxed max-w-[280px] z-10 font-medium">
         {insight}
       </p>
+      {!isMobilePresentation && <CreatorAttribution />}
       
     </div>
   );
@@ -2700,6 +2717,7 @@ function FocusGalaxyContainer() {
                 />
               </TabsContent>
             </Tabs>
+            <CreatorAttribution />
           </SheetContent>
         </Sheet>
       )}
