@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, memo, type CSSProperties, type Re
 import { createPortal } from 'react-dom';
 import { createId } from '@/lib/utils';
 import { PRIORITY_STORAGE_KEY, usePriorityPersistence } from '@/hooks/use-priority-persistence';
-import { Plus, X, Target, Activity, Orbit, Trash2, ListChecks, Volume2, VolumeX, Music2, CheckCircle2, ChevronDown, ChevronUp, SunMedium, MoreHorizontal } from 'lucide-react';
+import { Plus, X, Target, Activity, Orbit, Trash2, ListChecks, Volume2, VolumeX, Music2, CheckCircle2, ChevronDown, ChevronUp, SunMedium, MoreHorizontal, Sparkle } from 'lucide-react';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
@@ -1251,17 +1251,19 @@ function getGalaxyFocusTarget(excludedId?: string) {
 
 function CreatorAttribution() {
   return (
-    <footer className="relative z-10 mt-4 shrink-0 border-t border-white/10 pt-3 text-center font-sans text-[11px] leading-relaxed text-white/60">
-      Crafted by{' '}
-      <a
-        href="https://www.linkedin.com/in/amyosry/"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex min-h-6 items-center rounded-sm font-medium text-white/75 underline decoration-white/25 underline-offset-4 transition-colors hover:text-white hover:decoration-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
-      >
-        Ahmed Yosry<span className="sr-only"> on LinkedIn (opens in a new tab)</span>
-      </a>
-    </footer>
+    <a
+      className="creator-signature"
+      href="https://www.linkedin.com/in/amyosry/"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      <Sparkle size={14} strokeWidth={1.25} aria-hidden="true" />
+      <span className="creator-signature-copy">
+        <span className="creator-signature-byline">a universe by</span>
+        <span className="creator-signature-name">Ahmed Yosry</span>
+      </span>
+      <span className="sr-only"> on LinkedIn (opens in a new tab)</span>
+    </a>
   );
 }
 
@@ -1293,7 +1295,6 @@ function InsightPanel({ insight, title, priority, presentation = 'desktop' }: { 
       <p className="text-[13px] text-white/60 leading-relaxed max-w-[280px] z-10 font-medium">
         {insight}
       </p>
-      {!isMobilePresentation && <CreatorAttribution />}
       
     </div>
   );
@@ -2589,7 +2590,10 @@ function FocusGalaxyContainer() {
       <header className="app-header fixed top-0 left-0 right-0 z-30 pointer-events-none">
         <div className="header-inner flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="header-brand flex flex-col items-start gap-1 pointer-events-auto">
-            <AppLogo />
+            <div className="brand-lockup">
+              <AppLogo />
+              <CreatorAttribution />
+            </div>
             <span className="text-[11px] text-white/60 font-medium ml-1">Turn your priorities into clarity.</span>
           </div>
           
@@ -2717,7 +2721,6 @@ function FocusGalaxyContainer() {
                 />
               </TabsContent>
             </Tabs>
-            <CreatorAttribution />
           </SheetContent>
         </Sheet>
       )}
